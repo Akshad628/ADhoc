@@ -8,7 +8,10 @@ import toast from 'react-hot-toast'
 
 function DashboardHome() {
   const [dashboardData, setDashboardData] = useState<any>(null)
-
+  const [tableData, setTableData] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [modalTitle, setModalTitle] = useState('')
   useEffect(() => {
     loadDashboard()
   }, [])
@@ -34,6 +37,33 @@ function DashboardHome() {
     }
   }
 
+  const loadModalData = async (type: string) => {
+    try {
+      setLoading(true)
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        `http://localhost:8000/api/dashboard/${type}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      )
+
+      const data = await response.json()
+
+      console.log('MODAL DATA:', data)
+
+      setTableData(data)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const stats = [
     {
       label: 'Active calls today',
@@ -46,6 +76,13 @@ function DashboardHome() {
       label: 'Students',
       value: dashboardData?.stats?.students ?? 0,
       icon: Users,
+      change: '',
+      up: true,
+    },
+    {
+      label: 'Faculty',
+      value: dashboardData?.stats?.faculty ?? 0,
+      icon: GraduationCap,
       change: '',
       up: true,
     },
@@ -72,13 +109,34 @@ function DashboardHome() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
+             onClick={() => {
+                setModalTitle(stat.label)
+
+                if (stat.label === 'Students') {
+                  loadModalData('students')
+                }
+
+                if (stat.label === 'Faculty') {
+                  loadModalData('faculty-list')
+                }
+
+                if (stat.label === 'Active calls today') {
+                  loadModalData('calls')
+                }
+
+                if (stat.label === 'Active sessions') {
+                  loadModalData('sessions')
+                }
+
+                setShowModal(true)
+              }}
             className="glass rounded-2xl p-5 hover:bg-white/10 transition-all group"
           >
             <div className="flex items-center justify-between mb-4">
@@ -161,6 +219,73 @@ function DashboardHome() {
           ))}
         </div>
       </motion.div>
+      {showModal && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-md z-50 flex items-center justify-center"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-[700px] max-w-[90vw]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white">
+                {modalTitle}
+              </h2>
+
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-3 py-1 bg-zinc-800 rounded"
+              >
+                Close
+              </button>
+            </div>
+            
+
+            <div className="overflow-auto max-h-[500px]">
+              {loading ? (
+                <p className="text-zinc-400">Loading...</p>
+              ) : (
+                <table className="w-full text-sm text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-700">
+                      {tableData.length > 0 &&
+                        Object.keys(tableData[0]).map((key) => (
+                          <th
+                            key={key}
+                            className="p-3 text-white font-semibold"
+                          >
+                            {key}
+                          </th>
+                        ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {tableData.map((row, index) => (
+                      <tr
+                        key={index}
+                        className="border-b border-zinc-800"
+                      >
+                        {Object.values(row).map((value: any, i) => (
+                          <td
+                            key={i}
+                            className="p-3 text-zinc-300"
+                          >
+                            {typeof value === 'object'
+                              ? JSON.stringify(value)
+                              : String(value)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

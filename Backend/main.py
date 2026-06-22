@@ -353,6 +353,11 @@ async def admin_dashboard(current_user: dict = Depends(get_current_user)):
         if u.get("role") == "student"
     ])
 
+    faculty_count = len([
+        u for u in users
+        if u.get("role") == "faculty"
+    ])
+
     active_sessions = len([
         s for s in sessions
         if s.get("status") == "active"
@@ -411,8 +416,8 @@ async def admin_dashboard(current_user: dict = Depends(get_current_user)):
         "stats": {
             "active_calls_today": active_calls_today,
             "students": students_count,
-            "active_sessions": active_sessions,
-            "knowledge_documents": knowledge_docs
+            "faculty": faculty_count,
+            "active_sessions": active_sessions
         },
         "activities": activities.data or []
     }
@@ -459,6 +464,101 @@ async def faculty_dashboard(current_user: dict = Depends(get_current_user)):
         },
         "sessions": all_sessions[:20]
     }
+
+@app.get("/api/dashboard/students")
+async def dashboard_students(current_user: dict = Depends(get_current_user)):
+    result = (
+        supabase.table("users")
+        .select("full_name,email,phone")
+        .eq("role", "student")
+        .execute()
+    )
+    return result.data
+
+
+@app.get("/api/dashboard/faculty-list")
+async def dashboard_faculty_list(current_user: dict = Depends(get_current_user)):
+    result = (
+        supabase.table("users")
+        .select("full_name,email,phone")
+        .eq("role", "faculty")
+        .execute()
+    )
+    return result.data
+
+
+@app.get("/api/dashboard/calls")
+async def dashboard_calls(current_user: dict = Depends(get_current_user)):
+    calls = (
+        supabase.table("calls")
+        .select("*")
+        .order("created_at", desc=True)
+        .execute()
+        .data or []
+    )
+
+    users = (
+        supabase.table("users")
+        .select("id,full_name")
+        .execute()
+        .data or []
+    )
+
+    user_map = {
+        u["id"]: u["full_name"]
+        for u in users
+    }
+
+    result = []
+
+    for call in calls:
+        result.append({
+            "username": user_map.get(call.get("user_id"), "Unknown"),
+            "duration": call.get("duration"),
+            "recording": call.get("recording_url"),
+            "phone_number": call.get("phone_number"),
+            "status": call.get("status"),
+            "topic": call.get("topic"),
+            "agent": call.get("agent")
+        })
+
+    return result
+
+
+@app.get("/api/dashboard/sessions")
+async def dashboard_sessions(current_user: dict = Depends(get_current_user)):
+    sessions = (
+        supabase.table("guidance_sessions")
+        .select("*")
+        .order("started_at", desc=True)
+        .execute()
+        .data or []
+    )
+
+    users = (
+        supabase.table("users")
+        .select("id,full_name")
+        .execute()
+        .data or []
+    )
+
+    user_map = {
+        u["id"]: u["full_name"]
+        for u in users
+    }
+
+    result = []
+
+    for session in sessions:
+        result.append({
+            "username": user_map.get(session.get("user_id"), "Unknown"),
+            "session_type": session.get("session_type"),
+            "status": session.get("status"),
+            "summary": session.get("summary"),
+            "recommendations": session.get("recommendations")
+        })
+
+    return result
 
 # ─── SESSION ENDPOINTS ─────────────────────────────────────────────────────
 @app.post("/api/sessions")
