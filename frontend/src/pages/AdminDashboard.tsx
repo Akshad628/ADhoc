@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect  } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LayoutDashboard, Phone, Settings, BookOpen, FileText, BarChart3, LogOut, Search, Bell, ChevronRight, TrendingUp, Users, GraduationCap, Clock, CheckCircle, Upload, Sparkles, Mic, PhoneCall, Plus, Trash2, Save, Download } from 'lucide-react'
@@ -7,67 +7,163 @@ import { useCalls } from '../hooks/useCalls'
 import toast from 'react-hot-toast'
 
 function DashboardHome() {
+  const [dashboardData, setDashboardData] = useState<any>(null)
+
+  useEffect(() => {
+    loadDashboard()
+  }, [])
+
+  const loadDashboard = async () => {
+    try {
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:8000/api/dashboard/admin',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      setDashboardData(data)
+    } catch (error) {
+      console.error('Dashboard fetch failed:', error)
+    }
+  }
+
   const stats = [
-    { label: 'Active calls today', value: '1,284', change: '+18%', up: true, icon: Phone },
-    { label: 'Leads engaged', value: '8,420', change: '+24%', up: true, icon: Users },
-    { label: 'Conversion rate', value: '37.2%', change: '+4.1%', up: true, icon: TrendingUp },
-    { label: 'Avg. response time', value: '1.4s', change: '-220ms', up: true, icon: Clock },
+    {
+      label: 'Active calls today',
+      value: dashboardData?.stats?.active_calls_today ?? 0,
+      icon: Phone,
+      change: '',
+      up: true,
+    },
+    {
+      label: 'Students',
+      value: dashboardData?.stats?.students ?? 0,
+      icon: Users,
+      change: '',
+      up: true,
+    },
+    {
+      label: 'Active sessions',
+      value: dashboardData?.stats?.active_sessions ?? 0,
+      icon: Clock,
+      change: '',
+      up: true,
+    },
   ]
-  const activities = [
-    { agent: 'Admissions Agent', action: 'Qualified lead', detail: 'Priya Sharma (B.Tech CSE)', time: '2m ago' },
-    { agent: 'Counselling Agent', action: 'Booked counselling slot', detail: 'Ahmed Khan', time: '5m ago' },
-    { agent: 'Fee Reminder', action: 'Collected Rs.48,000 from 12 students', detail: '', time: '12m ago' },
-    { agent: 'Onboarding Agent', action: 'Completed onboarding for 24 new students', detail: '', time: '26m ago' },
-    { agent: 'Outreach Agent', action: 'Reached 320 prospects in Pune region', detail: '', time: '1h ago' },
-  ]
+
+  const activities = dashboardData?.activities ?? []
+
   return (
     <div className="space-y-6">
-      <div><h1 className="text-3xl font-bold text-white mb-1">Welcome back</h1><p className="text-zinc-400">Here is what your AI workforce did today.</p></div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-1">
+          Welcome back
+        </h1>
+
+        <p className="text-zinc-400">
+          Here is what your AI workforce did today.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {stats.map((stat, i) => (
-          <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-            className="glass rounded-2xl p-5 hover:bg-white/10 transition-all group">
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="glass rounded-2xl p-5 hover:bg-white/10 transition-all group"
+          >
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center"><stat.icon size={20} className="text-purple-400" /></div>
-              <span className={`text-xs font-medium px-2 py-1 rounded-full ${stat.up ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>{stat.change}</span>
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                <stat.icon
+                  size={20}
+                  className="text-purple-400"
+                />
+              </div>
+
+              <span
+                className={`text-xs font-medium px-2 py-1 rounded-full ${
+                  stat.up
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}
+              >
+                {stat.change}
+              </span>
             </div>
-            <div className="text-3xl font-bold text-white mb-1">{stat.value}</div>
-            <div className="text-sm text-zinc-500">{stat.label}</div>
+
+            <div className="text-3xl font-bold text-white mb-1">
+              {stat.value}
+            </div>
+
+            <div className="text-sm text-zinc-500">
+              {stat.label}
+            </div>
           </motion.div>
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="lg:col-span-2 glass rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-white">Recent activity</h3>
-            <button className="text-sm text-purple-400 hover:text-purple-300">View all</button>
-          </div>
-          <div className="space-y-4">
-            {activities.map((a, i) => (
-              <div key={i} className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors">
-                <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0"><CheckCircle size={16} className="text-emerald-400" /></div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white"><span className="font-medium">{a.agent}</span>{' — '}<span className="text-zinc-400">{a.action}</span>{a.detail && <span className="text-zinc-500"> — {a.detail}</span>}</p>
-                </div>
-                <span className="text-xs text-zinc-500 flex-shrink-0">{a.time}</span>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="glass rounded-2xl p-6"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="font-semibold text-white">
+            Recent activity
+          </h3>
+
+          <button className="text-sm text-purple-400 hover:text-purple-300">
+            View all
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {activities.map((a, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors"
+            >
+              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <CheckCircle
+                  size={16}
+                  className="text-emerald-400"
+                />
               </div>
-            ))}
-          </div>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="glass rounded-2xl p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/20 rounded-full blur-[60px]" />
-          <div className="relative z-10">
-            <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-4"><GraduationCap size={24} className="text-purple-400" /></div>
-            <h3 className="font-semibold text-white text-lg mb-2">Launch a new AI agent in minutes</h3>
-            <p className="text-sm text-zinc-400 mb-6">Pick a template, give it your knowledge base and let it start working across calls, WhatsApp and email.</p>
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-zinc-100 text-black rounded-full text-sm font-medium transition-all">Create agent<ChevronRight size={16} /></button>
-          </div>
-        </motion.div>
-      </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white">
+                  <span className="font-medium">
+                    {a.event_data?.agent}
+                  </span>
+
+                  {' — '}
+
+                  <span className="text-zinc-400">
+                    {a.event_data?.message}
+                  </span>
+                </p>
+              </div>
+
+              <span className="text-xs text-zinc-500 flex-shrink-0">
+                {a.time}
+              </span>
+            </div>
+          ))}
+        </div>
+      </motion.div>
     </div>
   )
 }
-
 function VoiceAgentsPage() {
   const [selectedAgent, setSelectedAgent] = useState(0)
   const [isListening, setIsListening] = useState(false)

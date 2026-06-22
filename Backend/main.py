@@ -339,16 +339,82 @@ async def admin_dashboard(current_user: dict = Depends(get_current_user)):
     calls = supabase.table("calls").select("*").execute().data or []
     sessions = supabase.table("guidance_sessions").select("*").execute().data or []
 
+    from datetime import datetime
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    active_calls_today = len([
+        c for c in calls
+        if c.get("created_at", "").startswith(today)
+    ])
+
+    students_count = len([
+        u for u in users
+        if u.get("role") == "student"
+    ])
+
+    active_sessions = len([
+        s for s in sessions
+        if s.get("status") == "active"
+    ])
+
+    knowledge_docs = len(
+        supabase.table("knowledge_base")
+        .select("*")
+        .execute()
+        .data or []
+    )
+
+    activities = (
+        supabase.table("analytics_events")
+        .select("event_type,event_data,created_at")
+        .order("created_at", desc=True)
+        .limit(10)
+        .execute()
+    )
+
+    from datetime import datetime
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    active_calls_today = len([
+        c for c in calls
+        if c.get("created_at", "").startswith(today)
+    ])
+
+    students_count = len([
+        u for u in users
+        if u.get("role") == "student"
+    ])
+
+    active_sessions = len([
+        s for s in sessions
+        if s.get("status") == "active"
+    ])
+
+    knowledge_docs = len(
+        supabase.table("knowledge_base")
+        .select("*")
+        .execute()
+        .data or []
+    )
+
+    activities = (
+        supabase.table("analytics_events")
+        .select("*")
+        .order("created_at", desc=True)
+        .limit(10)
+        .execute()
+    )
+
     return {
         "stats": {
-            "total_users": len(users),
-            "total_calls": len(calls),
-            "total_sessions": len(sessions),
-            "active_sessions": len([s for s in sessions if s.get("status") == "active"]),
-            "avg_call_duration": sum(c.get("duration", 0) for c in calls) / max(len(calls), 1) / 60
+            "active_calls_today": active_calls_today,
+            "students": students_count,
+            "active_sessions": active_sessions,
+            "knowledge_documents": knowledge_docs
         },
-        "recent_calls": calls[:10],
-        "recent_users": users[:10]
+        "activities": activities.data or []
     }
 
 @app.get("/api/dashboard/student")

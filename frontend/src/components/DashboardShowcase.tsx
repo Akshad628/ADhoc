@@ -2,15 +2,67 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const dashboards = [
-  { role: 'admin', label: 'Admin', color: 'from-purple-600 to-purple-400',
-    stats: [{l:'Live conversations',v:'147'},{l:'Applications today',v:'+218'},{l:'Avg. call duration',v:'3m 42s'},{l:'Knowledge documents',v:'1,284'},{l:'Conversion rate',v:'38.4%'}],
-    sidebar: ['Admissions funnel','Knowledge uploads','Prompt management','Voice AI','Telephony'], chart: true },
-  { role: 'faculty', label: 'Faculty', color: 'from-cyan-600 to-cyan-400',
-    stats: [{l:'Next class',v:'Algorithms • 10:30'},{l:'Attendance %',v:'94%'},{l:'Pending assignments',v:'12'},{l:'Students at risk',v:'3'},{l:'Office hours',v:'4-6pm'}],
-    sidebar: ['Classes','Attendance','Meetings','Assignments','Analytics'], chart: true },
-  { role: 'student', label: 'Student', color: 'from-emerald-600 to-emerald-400',
-    stats: [{l:'Application status',v:'Under review'},{l:'Scholarship match',v:'₹ 80,000 / yr'},{l:'Next deadline',v:'15 Mar'},{l:'Recommended colleges',v:'8'},{l:'Semester progress',v:'62%'}],
-    sidebar: ['Career assistant','Admissions tracker','Scholarships','Documents','Roadmap'], chart: true },
+  {
+    role: 'admin',
+    label: 'Admin',
+    color: 'from-purple-600 to-purple-400',
+    stats: [
+      { l: 'Live conversations', v: '147' },
+      { l: 'Applications today', v: '+218' },
+      { l: 'Avg. call duration', v: '3m 42s' },
+      { l: 'Knowledge documents', v: '1,284' }
+    ],
+    sidebar: [
+      'Admissions funnel',
+      'Knowledge uploads',
+      'Prompt management',
+      'Voice AI',
+      'Telephony'
+    ],
+    chart: true
+  },
+
+  {
+    role: 'faculty',
+    label: 'Faculty',
+    color: 'from-cyan-600 to-cyan-400',
+    stats: [
+      { l: 'Next class', v: 'Algorithms • 10:30' },
+      { l: 'Attendance %', v: '94%' },
+      { l: 'Pending assignments', v: '12' },
+      { l: 'Students at risk', v: '3' },
+      { l: 'Office hours', v: '4-6pm' }
+    ],
+    sidebar: [
+      'Classes',
+      'Attendance',
+      'Meetings',
+      'Assignments',
+      'Analytics'
+    ],
+    chart: true
+  },
+
+  {
+    role: 'student',
+    label: 'Student',
+    color: 'from-emerald-600 to-emerald-400',
+    stats: [
+      { l: 'Application status', v: 'Under review' },
+      { l: 'Scholarship match', v: '₹ 80,000 / yr' },
+      { l: 'Next deadline', v: '15 Mar' },
+      { l: 'Recommended colleges', v: '8' },
+      { l: 'Semester progress', v: '62%' }
+    ],
+    sidebar: [
+      'Career assistant',
+      'Admissions tracker',
+      'Scholarships',
+      'Documents',
+      'Roadmap'
+    ],
+    chart: true
+  }
 ]
 
 export default function DashboardShowcase() {
