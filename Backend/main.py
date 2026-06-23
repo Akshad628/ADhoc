@@ -524,12 +524,7 @@ async def admin_dashboard(current_user: dict = Depends(get_current_user)):
             "students": students_count,
             "faculty": faculty_count,
             "active_sessions": active_sessions
-            "active_calls_today": active_calls_today,
-            "students": students_count,
-            "faculty": faculty_count,
-            "active_sessions": active_sessions
         },
-        "activities": activities.data or []
         "activities": activities.data or []
     }
 
