@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LayoutDashboard, GraduationCap, FileText, Award, BookOpen, Map, LogOut, Search, Bell, Clock, CheckCircle, Building2, TrendingUp, AlertCircle, Upload, Calendar } from 'lucide-react'
@@ -62,15 +62,68 @@ function CareerAssistant() {
     { role: 'agent', text: 'Great choice! Based on your interests, I recommend exploring: 1) Computer Science Engineering, 2) Data Science, 3) Artificial Intelligence. Would you like me to suggest colleges for these streams?' },
   ])
   const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
-  const sendMessage = () => {
-    if (!input.trim()) return
-    setMessages([...messages, { role: 'user', text: input }])
-    setTimeout(() => {
-      setMessages(prev => [...prev, { role: 'agent', text: 'That is a great question! Let me analyze your profile and get back with personalized recommendations. Meanwhile, you can check our recommended colleges section.' }])
-    }, 1000)
-    setInput('')
+  useEffect(() => {
+  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+}, [messages, loading])
+
+  const sendMessage = async () => {
+  if (!input.trim() || loading) return;
+
+  const userMessage = input;
+
+  // Show user's message immediately
+  setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+  setInput('');
+  setLoading(true);
+
+  try {
+    const token = localStorage.getItem('token');
+
+    const response = await fetch('http://localhost:8000/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        message: userMessage,
+        session_id: 'career-assistant',
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get AI response');
+    }
+
+    const data = await response.json();
+
+    setMessages(prev => [
+      ...prev,
+      {
+        role: 'agent',
+        text: data.response,
+      },
+    ]);
+    setLoading(false);
+  } catch (error) {
+    console.error(error);
+
+    setLoading(false);
+
+    setMessages(prev => [
+      ...prev,
+      {
+        role: 'agent',
+        text: 'Sorry, something went wrong while contacting the AI.',
+      },
+    ]);
+
+    toast.error('Unable to contact the AI server. Please check your internet or try again.');
   }
+};
 
   return (
     <div className="space-y-6">
@@ -90,12 +143,47 @@ function CareerAssistant() {
               </div>
             </div>
           ))}
+          {/* AI Typing */}
+{loading && (
+  <div className="flex justify-start">
+    <div
+      className="max-w-[75%] px-4 py-3 rounded-2xl shadow-lg glass-panel text-zinc-200 rounded-tl-none border border-white/10"
+    >
+      <p className="text-[10px] font-mono font-bold tracking-wider text-purple-400 mb-1.5">
+        AI ASSISTANT
+      </p>
+
+      <div className="flex items-center gap-1">
+        <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></span>
+        <span
+          className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+          style={{ animationDelay: "0.2s" }}
+        ></span>
+        <span
+          className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+          style={{ animationDelay: "0.4s" }}
+        ></span>
+      </div>
+    </div>
+  </div>
+)}
+          <div ref={messagesEndRef} />
         </div>
         <div className="flex gap-2">
           <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
             placeholder="Ask about careers, courses, colleges..."
             className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl py-3 px-4 text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 hover:border-white/20 transition-all" />
-          <button onClick={sendMessage} className="px-6 py-3 bg-gradient-to-r from-purple-600 via-pink-500 to-purple-500 text-white rounded-xl font-medium transition-all shadow-md border border-white/10 hover:border-purple-300/30 glow-purple">Send</button>
+          <button
+  onClick={sendMessage}
+  disabled={loading}
+  className={`px-6 py-3 rounded-xl font-medium transition-all shadow-md border border-white/10 ${
+    loading
+      ? "bg-zinc-700 cursor-not-allowed opacity-60"
+      : "bg-gradient-to-r from-purple-600 via-pink-500 to-purple-500 hover:border-purple-300/30 glow-purple"
+  } text-white`}
+>
+  {loading ? "Thinking..." : "Send"}
+</button>
         </div>
       </div>
     </div>
