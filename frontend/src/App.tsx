@@ -9,6 +9,7 @@ import FacultyDashboard from './pages/FacultyDashboard'
 import StudentDashboard from './pages/StudentDashboard'
 import VoiceCallPage from './pages/VoiceCallPage'
 import ProtectedRoute from './components/ProtectedRoute'
+import StudentProfilePage from './pages/StudentProfile'
 
 function App() {
   return (
@@ -27,6 +28,12 @@ function App() {
           <Route path="/faculty/*" element={
             <ProtectedRoute allowedRoles={['faculty']}>
               <FacultyDashboard />
+            </ProtectedRoute>
+          } />
+          {/* /student/profile must come BEFORE /student/* wildcard */}
+          <Route path="/student/profile" element={
+            <ProtectedRoute allowedRoles={['student']}>
+              <StudentProfilePage />
             </ProtectedRoute>
           } />
           <Route path="/student/*" element={

@@ -301,7 +301,9 @@ export default function StudentDashboard() {
             <button className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white border border-white/5 transition-all relative">
               <Bell size={18} /><span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </button>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-400 flex items-center justify-center text-white font-extrabold text-sm shadow-md">{user?.avatar || 'S'}</div>
+            <button onClick={() => navigate('/student/profile')} className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-400 flex items-center justify-center text-white font-extrabold text-sm shadow-md hover:scale-105 active:scale-95 transition-transform" title="My Profile">
+              {user?.full_name?.[0] || user?.email?.[0] || 'S'}
+            </button>
           </div>
         </header>
         <div className="flex-1 p-6 overflow-auto bg-transparent">
