@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LayoutDashboard, GraduationCap, FileText, Award, BookOpen, Map, LogOut, Search, Bell, Clock, CheckCircle, Building2, TrendingUp, AlertCircle, Upload, Calendar } from 'lucide-react'
+import { LayoutDashboard, GraduationCap, FileText, Award, BookOpen, Map, LogOut, Search, Bell, Clock, CheckCircle, Building2, TrendingUp, AlertCircle, Upload, Calendar, ClipboardList } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { apiFetch } from '../hooks/useApi'
+import MyScholarshipsPage from './MyScholarshipsPage'
 import toast from 'react-hot-toast'
 
 function StudentHome() {
@@ -223,72 +225,165 @@ function AdmissionsTracker() {
 }
 
 function Scholarships() {
-  const scholarships = [
-    { name: 'Merit Scholarship', amount: '₹ 80,000/year', eligibility: '90%+ in 12th', deadline: 'Mar 31, 2026', status: 'Eligible' },
-    { name: 'Minority Scholarship', amount: '₹ 50,000/year', eligibility: 'Minority community', deadline: 'Apr 15, 2026', status: 'Eligible' },
-    { name: 'Sports Quota', amount: '₹ 40,000/year', eligibility: 'National level player', deadline: 'Apr 30, 2026', status: 'Check Eligibility' },
-    { name: 'Research Fellowship', amount: '₹ 1,20,000/year', eligibility: 'JEE Advanced rank < 5000', deadline: 'May 15, 2026', status: 'Not Eligible' },
-  ]
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-white mb-1">Scholarships</h1>
-      <p className="text-zinc-400">Find and apply for scholarships.</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {scholarships.map((s, i) => (
-          <motion.div key={s.name} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
-            className="glass rounded-2xl p-5 hover:bg-white/10 transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-white">{s.name}</h3>
-              <span className={`text-xs px-2 py-1 rounded-full ${s.status === 'Eligible' ? 'bg-emerald-500/20 text-emerald-400' : s.status === 'Check Eligibility' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>{s.status}</span>
-            </div>
-            <p className="text-2xl font-bold text-purple-400 mb-2">{s.amount}</p>
-            <p className="text-sm text-zinc-400 mb-1">Eligibility: {s.eligibility}</p>
-            <p className="text-sm text-zinc-500">Deadline: {s.deadline}</p>
-            <button className="mt-4 w-full py-2 bg-white/10 hover:bg-white/20 rounded-xl text-sm text-white transition-all">Apply Now</button>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  )
-}
+  const navigate = useNavigate()
+  const [scholarships, setScholarships] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
 
-function Documents() {
-  const docs = [
-    { name: '10th Marksheet', status: 'Uploaded', size: '2.4 MB', date: 'Jan 15, 2026' },
-    { name: '12th Marksheet', status: 'Uploaded', size: '3.1 MB', date: 'Jan 15, 2026' },
-    { name: 'JEE Score Card', status: 'Uploaded', size: '1.8 MB', date: 'Feb 2, 2026' },
-    { name: 'Aadhaar Card', status: 'Pending', size: '-', date: '-' },
-    { name: 'Income Certificate', status: 'Pending', size: '-', date: '-' },
-  ]
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-white mb-1">Documents</h1>
-      <p className="text-zinc-400">Manage your academic documents.</p>
-      <div className="glass rounded-2xl p-12 text-center border border-dashed border-white/20 mb-6">
-        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mx-auto mb-4"><Upload size={24} className="text-zinc-400" /></div>
-        <h3 className="font-semibold text-white mb-2">Upload documents</h3>
-        <p className="text-sm text-zinc-400 mb-4">PDF, JPG, PNG up to 10 MB</p>
-        <button className="px-6 py-2.5 bg-white text-black rounded-full text-sm font-medium hover:bg-zinc-100 transition-all">Select Files</button>
+  useEffect(() => {
+    loadScholarships()
+  }, [])
+
+  const loadScholarships = async () => {
+    try {
+      const data = await apiFetch('/api/student/scholarships')
+      setScholarships(data)
+    } catch (e) {
+      toast.error('Failed to load scholarships')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApply = async (id: string) => {
+    setApplyingId(id)
+    try {
+      const data = await apiFetch(`/api/student/scholarships/${id}/apply`, {
+        method: 'POST'
+      })
+      if (data.success) {
+        toast.success('Successfully applied for scholarship!')
+        setScholarships(prev => prev.map(s => s.id === id ? { ...s, applied: true } : s))
+        setTimeout(() => {
+          navigate('/student/my-scholarships')
+        }, 1000)
+      } else {
+        toast.error(data.message || 'Application failed')
+      }
+    } catch (e) {
+      toast.error('Network error occurred')
+    } finally {
+      setApplyingId(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="h-64 flex flex-col items-center justify-center gap-4 text-zinc-500">
+        <div className="w-10 h-10 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+        <p className="font-medium">Discovering opportunities...</p>
       </div>
-      <div className="glass rounded-2xl overflow-hidden">
-        <table className="w-full">
-          <thead><tr className="text-xs text-zinc-500 border-b border-white/10">
-            <th className="text-left px-6 py-3 font-medium">NAME</th>
-            <th className="text-left px-6 py-3 font-medium">SIZE</th>
-            <th className="text-left px-6 py-3 font-medium">DATE</th>
-            <th className="text-left px-6 py-3 font-medium">STATUS</th>
-          </tr></thead>
-          <tbody>
-            {docs.map((d, i) => (
-              <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                <td className="px-6 py-4 text-sm text-white flex items-center gap-2"><FileText size={16} className="text-zinc-500" />{d.name}</td>
-                <td className="px-6 py-4 text-sm text-zinc-400\">{d.size}</td>
-                <td className="px-6 py-4 text-sm text-zinc-400\">{d.date}</td>
-                <td className="px-6 py-4"><span className={`text-xs px-2.5 py-1 rounded-full ${d.status==='Uploaded'?'bg-emerald-500/20 text-emerald-400':'bg-yellow-500/20 text-yellow-400'}`}>{d.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-purple-100 to-white/70 mb-2">Scholarships</h1>
+          <p className="text-zinc-400 font-medium">Discover and apply for financial aid programs tailored to your profile.</p>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {scholarships.map((s, i) => {
+          const isClosed = s.application_end_date && new Date(s.application_end_date) < new Date()
+          return (
+            <motion.div key={s.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
+              className={`relative group rounded-3xl p-[1px] overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${s.is_featured ? 'hover:shadow-amber-500/20' : 'hover:shadow-purple-500/20'}`}>
+              
+              {s.is_featured && (
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/30 via-orange-500/10 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
+              )}
+              
+              <div className="relative h-full glass rounded-3xl p-6 md:p-8 flex flex-col justify-between border border-white/5 bg-white/[0.02] backdrop-blur-xl">
+                
+                <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
+                
+                <div className="relative z-10">
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <h3 className="font-bold text-white text-xl md:text-2xl leading-tight tracking-tight">{s.title}</h3>
+                    <div className="flex flex-col gap-2 items-end shrink-0">
+                      {s.is_featured && (
+                        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                          ★ Featured
+                        </span>
+                      )}
+                      <span className={`text-[10px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-full border ${isClosed ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                        {isClosed ? 'Closed' : 'Active'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 mb-6">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-zinc-300 text-xs font-medium border border-white/5">
+                      <Building2 size={14} className="text-purple-400" />
+                      {s.provider_name}
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-zinc-300 text-xs font-medium border border-white/5">
+                      <Award size={14} className="text-pink-400" />
+                      {s.scholarship_type}
+                    </div>
+                  </div>
+                  
+                  <div className="mb-6">
+                    <p className="text-sm font-medium text-zinc-500 mb-1">Grant Amount</p>
+                    <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-emerald-400 via-cyan-400 to-teal-500 tracking-tight">
+                      ₹{s.scholarship_amount.toLocaleString()}
+                    </p>
+                  </div>
+                  
+                  {s.eligibility_criteria && (
+                    <div className="mb-6">
+                      <p className="text-sm font-medium text-zinc-500 mb-1">Eligibility Criteria</p>
+                      <p className="text-sm text-zinc-300 leading-relaxed">
+                        {s.eligibility_criteria.length > 100 ? `${s.eligibility_criteria.substring(0, 100)}...` : s.eligibility_criteria}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative z-10 mt-2 pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-zinc-400 text-sm font-medium w-full md:w-auto">
+                    <Calendar size={16} className={isClosed ? 'text-red-400' : 'text-emerald-400'} />
+                    {s.application_end_date ? (
+                       <span>Deadline: <span className="text-white">{new Date(s.application_end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span></span>
+                    ) : (
+                       <span>No Deadline</span>
+                    )}
+                  </div>
+
+                  <div className="w-full md:w-auto shrink-0">
+                    {s.applied ? (
+                      <button disabled className="w-full md:w-auto px-6 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm font-bold text-zinc-400 cursor-not-allowed flex items-center justify-center gap-2">
+                        <CheckCircle size={16} className="text-emerald-500" /> Applied
+                      </button>
+                    ) : isClosed ? (
+                      <button disabled className="w-full md:w-auto px-6 py-2.5 bg-red-500/10 border border-red-500/20 rounded-xl text-sm font-bold text-red-400 cursor-not-allowed">
+                        Closed
+                      </button>
+                    ) : (
+                      <button onClick={() => handleApply(s.id)} disabled={applyingId !== null}
+                        className="w-full md:w-auto px-8 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 rounded-xl text-sm font-bold text-white shadow-lg shadow-purple-500/25 active:scale-95 transition-all flex items-center justify-center gap-2 group">
+                        {applyingId === s.id ? (
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : 'Apply Now'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
+          )
+        })}
+        {scholarships.length === 0 && (
+          <div className="col-span-1 xl:col-span-2 flex flex-col items-center justify-center py-20 px-4 glass rounded-3xl border border-white/5 bg-white/[0.01]">
+            <Award size={48} className="text-zinc-600 mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">No active scholarships</h3>
+            <p className="text-zinc-400 text-center max-w-md">There are currently no open scholarships available. Check back later for new opportunities.</p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -340,7 +435,7 @@ export default function StudentDashboard() {
     { path: '/student/career', label: 'Career Assistant', icon: GraduationCap },
     { path: '/student/admissions', label: 'Admissions Tracker', icon: FileText },
     { path: '/student/scholarships', label: 'Scholarships', icon: Award },
-    { path: '/student/documents', label: 'Documents', icon: BookOpen },
+    { path: '/student/my-scholarships', label: 'My Scholarships', icon: ClipboardList },
     { path: '/student/roadmap', label: 'Roadmap', icon: Map },
   ]
   return (
@@ -398,9 +493,9 @@ export default function StudentDashboard() {
           <Routes>
             <Route path="/" element={<StudentHome />} />
             <Route path="/career" element={<CareerAssistant />} />
-            <Route path="/admissions" element={<AdmissionsTracker />} />
+             <Route path="/admissions" element={<AdmissionsTracker />} />
             <Route path="/scholarships" element={<Scholarships />} />
-            <Route path="/documents" element={<Documents />} />
+            <Route path="/my-scholarships" element={<MyScholarshipsPage />} />
             <Route path="/roadmap" element={<Roadmap />} />
           </Routes>
         </div>

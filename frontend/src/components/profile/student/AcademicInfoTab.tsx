@@ -21,10 +21,10 @@ interface AcademicInfoTabProps {
 
 const LEVELS: { value: AcademicLevel; label: string }[] = [
   { value: '10th', label: '10th Class / SSC' },
-  { value: 'intermediate', label: 'Intermediate / 12th / HSC' },
-  { value: 'diploma', label: 'Diploma' },
-  { value: 'ug', label: 'Under-Graduate (UG)' },
-  { value: 'pg', label: 'Post-Graduate (PG)' },
+  { value: '12th', label: 'Intermediate / 12th / HSC' },
+  { value: 'Diploma', label: 'Diploma' },
+  { value: 'UG', label: 'Under-Graduate (UG)' },
+  { value: 'PG', label: 'Post-Graduate (PG)' },
 ]
 
 const INPUT_CLASS = 'w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-zinc-600 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/10 transition-all'
@@ -37,22 +37,23 @@ export default function AcademicInfoTab({ records, semesters, onRefresh }: Acade
   const [addingSem, setAddingSem] = useState(false)
   const [showSemForm, setShowSemForm] = useState(false)
 
-  const getRecord = (level: AcademicLevel) => records.find(r => r.level === level)
+  const getRecord = (level: AcademicLevel) => records.find(r => r.education_level === level)
 
   const setField = (level: string, key: string, val: string) =>
     setForms(f => ({ ...f, [level]: { ...f[level], [key]: val } }))
 
-  const saveRecord = async (level: AcademicLevel) => {
+  const handleSave = async (level: string, formData: Partial<UpsertAcademicRecordRequest>) => {
+    const existing = records.find(r => r.education_level === level)
+    const instName = formData.institution_name || existing?.institution_name
+    if (!instName) { toast.error('Institution name is required'); return }
     setSaving(true)
-    const existing = getRecord(level)
-    const formData = forms[level] || {}
-    const data: UpsertAcademicRecordRequest = {
-      level,
-      institution_name: formData.institution_name || existing?.institution_name,
+    const data = {
+      education_level: level,
+      institution_name: instName,
       board_university: formData.board_university || existing?.board_university,
       degree: formData.degree || existing?.degree,
-      branch_stream: formData.branch_stream || existing?.branch_stream,
-      hall_ticket: formData.hall_ticket || existing?.hall_ticket,
+      specialization: formData.specialization || existing?.specialization,
+      hall_ticket_number: formData.hall_ticket_number || existing?.hall_ticket_number,
       year_of_passing: formData.year_of_passing ? Number(formData.year_of_passing) : existing?.year_of_passing,
       percentage: formData.percentage ? Number(formData.percentage) : existing?.percentage,
       cgpa: formData.cgpa ? Number(formData.cgpa) : existing?.cgpa,
@@ -65,6 +66,11 @@ export default function AcademicInfoTab({ records, semesters, onRefresh }: Acade
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Save failed')
     } finally { setSaving(false) }
+  }
+
+  const saveRecord = async (level: AcademicLevel) => {
+    const formData = forms[level] || {}
+    await handleSave(level, formData)
   }
 
   const addSemester = async () => {
@@ -125,12 +131,12 @@ export default function AcademicInfoTab({ records, semesters, onRefresh }: Acade
                         {[
                           { key: 'institution_name', label: 'Institution Name' },
                           { key: 'board_university', label: 'Board / University' },
-                          { key: 'degree', label: 'Degree / Programme', show: ['ug','pg','diploma'].includes(value) },
-                          { key: 'branch_stream', label: 'Branch / Stream' },
-                          { key: 'hall_ticket', label: 'Hall Ticket / Roll No.' },
+                          { key: 'degree', label: 'Degree / Programme', show: ['UG','PG','Diploma'].includes(value) },
+                          { key: 'specialization', label: 'Branch / Stream' },
+                          { key: 'hall_ticket_number', label: 'Hall Ticket / Roll No.' },
                           { key: 'year_of_passing', label: 'Year of Passing', type: 'number' },
                           { key: 'percentage', label: 'Percentage (%)', type: 'number' },
-                          { key: 'cgpa', label: 'CGPA', type: 'number', show: ['ug','pg'].includes(value) },
+                          { key: 'cgpa', label: 'CGPA', type: 'number', show: ['UG','PG'].includes(value) },
                         ].filter(f => f.show !== false).map(({ key, label, type = 'text' }) => (
                           <div key={key}>
                             <label className="block text-zinc-400 text-xs font-medium mb-1.5">{label}</label>

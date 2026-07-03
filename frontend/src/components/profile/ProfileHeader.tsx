@@ -19,7 +19,7 @@ export default function ProfileHeader({ profile, onRefreshAI, aiRefreshing }: Pr
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
-  const { user, profile: sp, strength } = profile
+  const { user, profile: sp, strength, academic_records } = profile
   const displayName = user?.full_name || 'Student'
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
   const total = strength?.total || 0
@@ -80,8 +80,8 @@ export default function ProfileHeader({ profile, onRefreshAI, aiRefreshing }: Pr
             <div className="w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-gradient-to-br from-purple-600 via-pink-500 to-cyan-500
                             flex items-center justify-center text-white font-bold text-2xl
                             shadow-2xl shadow-purple-500/30 ring-2 ring-white/10 overflow-hidden">
-              {sp?.photo_url ? (
-                <img src={sp.photo_url} alt="Profile" className="w-full h-full object-cover" />
+              {sp?.profile_photo_url ? (
+                <img src={sp.profile_photo_url} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 initials
               )}
@@ -107,25 +107,25 @@ export default function ProfileHeader({ profile, onRefreshAI, aiRefreshing }: Pr
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl md:text-2xl font-bold text-white">{displayName}</h1>
               {user?.email_verified && (
-                <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" title="Email verified" />
+                <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" aria-label="Email verified" />
               )}
             </div>
             <p className="text-zinc-400 text-sm truncate">{user?.email}</p>
             <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-              {sp?.student_id ? (
+              {sp?.user_id ? (
                 <span className="px-2 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/20 text-purple-400 text-xs font-mono font-semibold">
-                  {sp.student_id}
+                  {sp.user_id}
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-lg bg-zinc-800 border border-white/5 text-zinc-500 text-xs">
                   ID pending admission
                 </span>
               )}
-              {sp?.current_institution && (
-                <span className="text-zinc-500 text-xs truncate">{sp.current_institution}</span>
+              {academic_records?.[0]?.institution_name && (
+                <span className="text-zinc-500 text-xs truncate">{academic_records[0].institution_name}</span>
               )}
-              {sp?.department && (
-                <span className="text-zinc-600 text-xs">{sp.department}</span>
+              {academic_records?.[0]?.specialization && (
+                <span className="text-zinc-600 text-xs">{academic_records[0].specialization}</span>
               )}
             </div>
           </div>

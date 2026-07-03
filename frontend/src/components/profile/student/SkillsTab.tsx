@@ -6,12 +6,12 @@ import { useStudentSkills } from '../../../hooks/useStudentSkills'
 import SkeletonCard from '../shared/SkeletonCard'
 
 const SKILL_SECTIONS = [
-  { key: 'programming_langs',  label: 'Programming Languages', placeholder: 'e.g. Python, Java, C++', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+  { key: 'programming_languages',  label: 'Programming Languages', placeholder: 'e.g. Python, Java, C++', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   { key: 'frameworks',         label: 'Frameworks & Libraries',placeholder: 'e.g. React, FastAPI, TensorFlow', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   { key: 'databases',          label: 'Databases',             placeholder: 'e.g. PostgreSQL, MongoDB, Redis', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  { key: 'cloud_technologies', label: 'Cloud & DevOps',        placeholder: 'e.g. AWS, Docker, Kubernetes', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
+  { key: 'cloud_platforms', label: 'Cloud & DevOps',        placeholder: 'e.g. AWS, Docker, Kubernetes', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
   { key: 'ai_ml_skills',       label: 'AI / ML Skills',        placeholder: 'e.g. NLP, Computer Vision, LLMs', color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
-  { key: 'tools',              label: 'Tools & Platforms',     placeholder: 'e.g. Git, Figma, Postman, JIRA', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  { key: 'software_tools',              label: 'Tools & Platforms',     placeholder: 'e.g. Git, Figma, Postman, JIRA', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   { key: 'soft_skills',        label: 'Soft Skills',           placeholder: 'e.g. Leadership, Communication', color: 'bg-teal-500/10 text-teal-400 border-teal-500/20' },
   { key: 'languages_known',    label: 'Languages Known',       placeholder: 'e.g. English, Telugu, Hindi', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
 ]
@@ -70,12 +70,12 @@ export default function SkillsTab() {
   useEffect(() => {
     if (skills) {
       setForm({
-        programming_langs: skills.programming_langs || [],
+        programming_languages: skills.programming_languages || [],
         frameworks: skills.frameworks || [],
         databases: skills.databases || [],
-        cloud_technologies: skills.cloud_technologies || [],
+        cloud_platforms: skills.cloud_platforms || [],
         ai_ml_skills: skills.ai_ml_skills || [],
-        tools: skills.tools || [],
+        software_tools: skills.software_tools || [],
         soft_skills: skills.soft_skills || [],
         languages_known: skills.languages_known || [],
       })

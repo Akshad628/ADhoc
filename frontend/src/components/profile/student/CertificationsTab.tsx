@@ -28,7 +28,7 @@ const catColors: Record<string, string> = {
 const INPUT_CLASS = 'w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-zinc-600 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/10 transition-all'
 
 interface FormState extends CreateCertificationRequest { }
-const EMPTY_FORM: FormState = { title: '', issuing_org: '', category: 'online_course', issue_date: '', expiry_date: '', credential_id: '', credential_url: '' }
+const EMPTY_FORM: FormState = { title: '', issuing_organization: '', category: 'online_course', issue_date: '', expiry_date: '', credential_id: '', credential_url: '' }
 
 export default function CertificationsTab() {
   const { certifications, loading, saving, addCertification, updateCertification, deleteCertification } = useStudentCertifications()
@@ -39,7 +39,7 @@ export default function CertificationsTab() {
   const set = (k: keyof FormState, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.title) { toast.error('Title is required'); return }
+    if (!form.title || !form.issuing_organization) { toast.error('Title and Issuing Organization are required'); return }
     const result = editId
       ? await updateCertification(editId, form)
       : await addCertification(form)
@@ -52,7 +52,7 @@ export default function CertificationsTab() {
   const openEdit = (cert: StudentCertification) => {
     setEditId(cert.id)
     setForm({
-      title: cert.title, issuing_org: cert.issuing_org || '', category: cert.category as CertificationCategory || 'online_course',
+      title: cert.title, issuing_organization: cert.issuing_organization || '', category: cert.category as CertificationCategory || 'online_course',
       issue_date: cert.issue_date?.split('T')[0] || '', expiry_date: cert.expiry_date?.split('T')[0] || '',
       credential_id: cert.credential_id || '', credential_url: cert.credential_url || ''
     })
@@ -88,8 +88,8 @@ export default function CertificationsTab() {
                 <input className={INPUT_CLASS} value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. AWS Cloud Practitioner, Smart India Hackathon" />
               </div>
               <div>
-                <label className="block text-zinc-400 text-xs font-medium mb-1.5">Issuing Organization</label>
-                <input className={INPUT_CLASS} value={form.issuing_org} onChange={e => set('issuing_org', e.target.value)} placeholder="e.g. AWS, NPTEL, Google" />
+                <label className="block text-zinc-400 text-xs font-medium mb-1.5">Issuing Organization *</label>
+                <input className={INPUT_CLASS} value={form.issuing_organization} onChange={e => set('issuing_organization', e.target.value)} placeholder="e.g. AWS, NPTEL, Google" />
               </div>
               <div>
                 <label className="block text-zinc-400 text-xs font-medium mb-1.5">Category</label>
@@ -140,7 +140,7 @@ export default function CertificationsTab() {
                     )}
                   </div>
                   <h3 className="text-white font-semibold text-sm leading-snug">{cert.title}</h3>
-                  {cert.issuing_org && <p className="text-zinc-500 text-xs mt-0.5">{cert.issuing_org}</p>}
+                  {cert.issuing_organization && <p className="text-zinc-500 text-xs mt-0.5">{cert.issuing_organization}</p>}
                   {cert.issue_date && (
                     <p className="text-zinc-600 text-xs mt-1">
                       {new Date(cert.issue_date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { StudentDocument, DocumentVersion } from '../types/profile.types'
+import { StudentDocument } from '../types/profile.types'
 
 const API_BASE = 'http://localhost:8000'
 function apiFetch(endpoint: string, options: RequestInit = {}) {
@@ -30,15 +30,15 @@ export function useStudentDocuments(category?: string) {
   }, [category])
 
   const uploadDocument = useCallback(async (
-    file: File, docCategory: string, subCategory?: string
+    file: File, documentType: string, documentName?: string
   ) => {
     setUploading(true)
     try {
       const token = localStorage.getItem('token')
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('category', docCategory)
-      if (subCategory) formData.append('sub_category', subCategory)
+      formData.append('document_type', documentType)
+      if (documentName) formData.append('document_name', documentName)
       const res = await fetch(`${API_BASE}/api/student/documents`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -81,7 +81,7 @@ export function useStudentDocuments(category?: string) {
     }
   }, [])
 
-  const getVersions = useCallback(async (docId: string): Promise<DocumentVersion[]> => {
+  const getVersions = useCallback(async (docId: string): Promise<any> => {
     try {
       const res = await apiFetch(`/api/student/documents/${docId}/versions`)
       if (!res.ok) return []

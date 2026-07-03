@@ -86,12 +86,12 @@ export default function AIInsightsTab({ onRefresh, refreshing }: { onRefresh: ()
           <div className="glass rounded-2xl p-6">
             <h3 className="text-white font-semibold mb-4 text-sm">Portfolio Scores</h3>
             <div className="flex flex-wrap items-center justify-center gap-8">
-              <ScoreRing score={insights?.profile_strength || 0} label="Profile Strength" />
+              <ScoreRing score={insights?.overall_profile_score || 0} label="Profile Strength" />
               {insights?.ats_score != null && <ScoreRing score={insights.ats_score} label="ATS Score" />}
             </div>
-            {insights?.analysis_summary && (
+            {insights?.ai_summary && (
               <div className="mt-4 p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                <p className="text-zinc-300 text-sm leading-relaxed">{insights.analysis_summary}</p>
+                <p className="text-zinc-300 text-sm leading-relaxed">{insights.ai_summary}</p>
               </div>
             )}
           </div>
@@ -120,13 +120,13 @@ export default function AIInsightsTab({ onRefresh, refreshing }: { onRefresh: ()
           )}
 
           {/* Skill Gaps */}
-          {insights?.skill_gaps && insights.skill_gaps.length > 0 && (
+          {insights?.skill_gap_analysis && insights.skill_gap_analysis.length > 0 && (
             <div className="glass rounded-2xl p-5">
               <h3 className="text-white font-semibold mb-3 text-sm flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-cyan-400" />Skill Gaps to Address
               </h3>
               <div className="space-y-3">
-                {insights.skill_gaps.map((gap, i) => (
+                {insights.skill_gap_analysis.map((gap, i) => (
                   <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-white font-medium text-sm">{gap.skill}</span>
@@ -134,9 +134,9 @@ export default function AIInsightsTab({ onRefresh, refreshing }: { onRefresh: ()
                         {gap.demand} demand
                       </span>
                     </div>
-                    {gap.suggested_courses?.length > 0 && (
+                    {(gap.courses?.length ?? 0) > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {gap.suggested_courses.map(c => (
+                        {gap.courses?.map(c => (
                           <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">{c}</span>
                         ))}
                       </div>
@@ -148,13 +148,13 @@ export default function AIInsightsTab({ onRefresh, refreshing }: { onRefresh: ()
           )}
 
           {/* Career Suggestions */}
-          {insights?.career_suggestions && insights.career_suggestions.length > 0 && (
+          {insights?.career_recommendations && insights.career_recommendations.length > 0 && (
             <div className="glass rounded-2xl p-5">
               <h3 className="text-white font-semibold mb-3 text-sm flex items-center gap-2">
                 <Zap className="w-4 h-4 text-yellow-400" />Career Suggestions
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {insights.career_suggestions.map((sug, i) => (
+                {insights.career_recommendations.map((sug, i) => (
                   <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 capitalize">
@@ -170,17 +170,17 @@ export default function AIInsightsTab({ onRefresh, refreshing }: { onRefresh: ()
           )}
 
           {/* Scholarship Suggestions */}
-          {insights?.scholarship_suggestions && insights.scholarship_suggestions.length > 0 && (
+          {insights?.scholarship_recommendations && insights.scholarship_recommendations.length > 0 && (
             <div className="glass rounded-2xl p-5">
               <h3 className="text-white font-semibold mb-3 text-sm flex items-center gap-2">
                 <Award className="w-4 h-4 text-emerald-400" />Scholarship Opportunities
               </h3>
               <div className="space-y-3">
-                {insights.scholarship_suggestions.map((sch, i) => (
+                {insights.scholarship_recommendations.map((sch, i) => (
                   <div key={i} className="flex items-start justify-between p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
                     <div>
-                      <p className="text-white font-medium text-sm">{sch.name}</p>
-                      <p className="text-emerald-400 text-xs font-semibold mt-0.5">{sch.amount}</p>
+                      <p className="text-white font-medium text-sm">{sch.title}</p>
+                      {sch.provider && <p className="text-emerald-400 text-xs font-semibold mt-0.5">{sch.provider}</p>}
                       <p className="text-zinc-500 text-xs mt-0.5">{sch.eligibility}</p>
                     </div>
                     <div className="flex flex-col items-end">
@@ -193,7 +193,7 @@ export default function AIInsightsTab({ onRefresh, refreshing }: { onRefresh: ()
             </div>
           )}
 
-          {!insights?.missing_documents?.length && !insights?.skill_gaps?.length && !insights?.career_suggestions?.length && (
+          {!insights?.missing_documents?.length && !insights?.skill_gap_analysis?.length && !insights?.career_recommendations?.length && (
             <div className="text-center py-8">
               <p className="text-zinc-500 text-sm">No insights generated yet. Click Refresh to analyze your profile.</p>
             </div>

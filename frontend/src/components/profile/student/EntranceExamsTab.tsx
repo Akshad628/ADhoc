@@ -10,7 +10,7 @@ import { SkeletonRow } from '../shared/SkeletonCard'
 const EXAM_LIST = ['EAMCET','JEE_MAIN','JEE_ADVANCED','NEET','CUET','GATE','CAT','GRE','IELTS','TOEFL','Other']
 
 const INPUT_CLASS = 'w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-zinc-600 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/10 transition-all'
-const EMPTY: CreateEntranceExamRequest = { exam_name: 'EAMCET', year: undefined, score: undefined, rank: undefined, percentile: undefined }
+const EMPTY: CreateEntranceExamRequest = { exam_name: 'EAMCET', exam_year: undefined, score: undefined, rank: undefined, percentile: undefined }
 
 const examColors: Record<string, string> = {
   EAMCET: 'text-emerald-400 bg-emerald-500/10', JEE_MAIN: 'text-blue-400 bg-blue-500/10',
@@ -27,10 +27,10 @@ export default function EntranceExamsTab() {
   const [form, setForm] = useState<CreateEntranceExamRequest>(EMPTY)
 
   const set = (k: keyof CreateEntranceExamRequest, v: string) =>
-    setForm(f => ({ ...f, [k]: ['year','score','rank','percentile'].includes(k) ? (v ? Number(v) : undefined) : v }))
+    setForm(f => ({ ...f, [k]: ['exam_year','score','rank','percentile'].includes(k) ? (v ? Number(v) : undefined) : v }))
 
   const handleSubmit = async () => {
-    if (!form.exam_name) { toast.error('Exam name required'); return }
+    if (!form.exam_name || !form.exam_year) { toast.error('Exam name and year are required'); return }
     const result = editId ? await updateExam(editId, form) : await addExam(form)
     if (result.success) { toast.success(editId ? 'Exam updated!' : 'Exam added!'); setShowForm(false); setEditId(null); setForm(EMPTY) }
     else toast.error(result.error || 'Failed')
@@ -38,7 +38,7 @@ export default function EntranceExamsTab() {
 
   const openEdit = (exam: EntranceExam) => {
     setEditId(exam.id)
-    setForm({ exam_name: exam.exam_name, year: exam.year, score: exam.score, rank: exam.rank, percentile: exam.percentile })
+    setForm({ exam_name: exam.exam_name, exam_year: exam.exam_year, score: exam.score, rank: exam.rank, percentile: exam.percentile })
     setShowForm(true)
   }
 
@@ -65,13 +65,13 @@ export default function EntranceExamsTab() {
             className="glass rounded-2xl p-5 overflow-hidden">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="col-span-2 md:col-span-1">
-                <label className="block text-zinc-400 text-xs font-medium mb-1.5">Exam</label>
+                <label className="block text-zinc-400 text-xs font-medium mb-1.5">Exam *</label>
                 <select className={INPUT_CLASS} value={form.exam_name} onChange={e => set('exam_name', e.target.value)}>
                   {EXAM_LIST.map(e => <option key={e} value={e} className="bg-[#1a1a2e]">{e.replace(/_/g, ' ')}</option>)}
                 </select>
               </div>
               {[
-                { k: 'year', l: 'Year' }, { k: 'score', l: 'Score / Marks' },
+                { k: 'exam_year', l: 'Year *' }, { k: 'score', l: 'Score / Marks' },
                 { k: 'rank', l: 'Rank / AIR' }, { k: 'percentile', l: 'Percentile (%)' },
               ].map(({ k, l }) => (
                 <div key={k}>
@@ -113,7 +113,7 @@ export default function EntranceExamsTab() {
                   </div>
                 </div>
                 <div className="mt-3 space-y-1">
-                  {exam.year && <p className="text-zinc-500 text-xs">{exam.year}</p>}
+                  {exam.exam_year && <p className="text-zinc-500 text-xs">{exam.exam_year}</p>}
                   {exam.score != null && <p className="text-white text-lg font-bold">{exam.score} <span className="text-zinc-500 text-sm font-normal">score</span></p>}
                   {exam.rank != null && <p className="text-cyan-400 text-sm">Rank: <span className="font-bold">{exam.rank.toLocaleString()}</span></p>}
                   {exam.percentile != null && <p className="text-purple-400 text-sm">Percentile: <span className="font-bold">{exam.percentile}%</span></p>}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Save, User, MapPin, Phone, Users } from 'lucide-react'
+import { Save, User, MapPin, Phone } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { FullStudentProfile, UpdateProfileRequest } from '../../../types/profile.types'
 
@@ -20,24 +20,14 @@ export default function PersonalInfoTab({ profile, onUpdate, saving }: PersonalI
     gender: sp?.gender || '',
     nationality: sp?.nationality || 'Indian',
     category: sp?.category || '',
-    aadhaar_number: sp?.aadhaar_number || '',
-    pan_number: sp?.pan_number || '',
-    passport_number: sp?.passport_number || '',
     address_line1: sp?.address_line1 || '',
     address_line2: sp?.address_line2 || '',
     city: sp?.city || '',
     state: sp?.state || '',
-    district: sp?.district || '',
-    pincode: sp?.pincode || '',
-    alternate_phone: sp?.alternate_phone || '',
-    parent_name: sp?.parent_name || '',
-    parent_phone: sp?.parent_phone || '',
-    parent_email: sp?.parent_email || '',
+    postal_code: sp?.postal_code || '',
+    father_name: sp?.father_name || '',
+    father_phone: sp?.father_phone || '',
     guardian_name: sp?.guardian_name || '',
-    current_institution: sp?.current_institution || '',
-    department: sp?.department || '',
-    current_year: sp?.current_year?.toString() || '',
-    current_semester: sp?.current_semester?.toString() || '',
   })
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -45,8 +35,6 @@ export default function PersonalInfoTab({ profile, onUpdate, saving }: PersonalI
   const handleSave = async () => {
     const payload: UpdateProfileRequest = {
       ...form,
-      current_year: form.current_year ? parseInt(form.current_year) : undefined,
-      current_semester: form.current_semester ? parseInt(form.current_semester) : undefined,
     }
     const result = await onUpdate(payload)
     if (result.success) toast.success('Profile updated successfully')
@@ -97,33 +85,20 @@ export default function PersonalInfoTab({ profile, onUpdate, saving }: PersonalI
         <Field label="Gender" name="gender" opts={['Male','Female','Other','Prefer not to say']} />
         <Field label="Nationality" name="nationality" />
         <Field label="Category" name="category" opts={['General','OBC','SC','ST','EWS']} />
-        <Field label="Aadhaar Number" name="aadhaar_number" />
-        <Field label="PAN Number" name="pan_number" />
-        <Field label="Passport Number" name="passport_number" />
       </Section>
 
       <Section title="Address" icon={MapPin}>
         <div className="md:col-span-2"><Field label="Address Line 1" name="address_line1" /></div>
         <div className="md:col-span-2"><Field label="Address Line 2" name="address_line2" /></div>
         <Field label="City" name="city" />
-        <Field label="District" name="district" />
         <Field label="State" name="state" opts={['Andhra Pradesh','Telangana','Karnataka','Tamil Nadu','Maharashtra','Delhi','Gujarat','Rajasthan','Uttar Pradesh','West Bengal','Other']} />
-        <Field label="Pincode" name="pincode" />
-        <Field label="Alternate Phone" name="alternate_phone" type="tel" />
+        <Field label="Pincode" name="postal_code" />
       </Section>
 
       <Section title="Emergency Contact" icon={Phone}>
-        <Field label="Parent / Guardian Name" name="parent_name" />
-        <Field label="Parent Phone" name="parent_phone" type="tel" />
-        <Field label="Parent Email" name="parent_email" type="email" />
+        <Field label="Parent / Guardian Name" name="father_name" />
+        <Field label="Parent Phone" name="father_phone" type="tel" />
         <Field label="Guardian Name (if different)" name="guardian_name" />
-      </Section>
-
-      <Section title="Current Academic Status" icon={Users}>
-        <div className="md:col-span-2"><Field label="Current Institution" name="current_institution" /></div>
-        <Field label="Department / Branch" name="department" />
-        <Field label="Current Year" name="current_year" opts={['1','2','3','4']} />
-        <Field label="Current Semester" name="current_semester" opts={['1','2','3','4','5','6','7','8']} />
       </Section>
     </motion.div>
   )

@@ -16,7 +16,7 @@ export default function OverviewTab({ profile, onTabChange }: OverviewTabProps) 
   const stats = [
     { label: 'Documents',      value: documents?.length || 0,       icon: FileText,       tab: 'documents',      color: 'text-blue-400',   bg: 'bg-blue-500/10' },
     { label: 'Certifications', value: certifications?.length || 0,   icon: Award,          tab: 'certifications', color: 'text-purple-400', bg: 'bg-purple-500/10' },
-    { label: 'Skill Sets',     value: skills ? Object.values({ a: skills.programming_langs, b: skills.frameworks, c: skills.soft_skills }).filter(a => Array.isArray(a) && a.length > 0).length : 0, icon: Code2, tab: 'skills', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+    { label: 'Skill Sets',     value: skills ? Object.values({ a: skills.programming_languages, b: skills.frameworks, c: skills.soft_skills }).filter(a => Array.isArray(a) && a.length > 0).length : 0, icon: Code2, tab: 'skills', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
     { label: 'Exam Results',   value: exams?.length || 0,            icon: ClipboardList,  tab: 'exams',          color: 'text-amber-400',  bg: 'bg-amber-500/10' },
     { label: 'Achievements',   value: achievements?.length || 0,     icon: Trophy,         tab: 'achievements',   color: 'text-emerald-400',bg: 'bg-emerald-500/10' },
     { label: 'Academic Levels',value: academic_records?.length || 0, icon: Sparkles,       tab: 'academic',       color: 'text-pink-400',   bg: 'bg-pink-500/10' },
@@ -43,10 +43,10 @@ export default function OverviewTab({ profile, onTabChange }: OverviewTabProps) 
               Your digital academic portfolio is <span className="text-purple-400 font-semibold">{strength?.total || 0}% complete</span>.
               {(strength?.total || 0) < 80 && ' Complete your profile to unlock scholarship recommendations.'}
             </p>
-            {sp?.student_id ? (
+            {sp?.user_id ? (
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-zinc-500 text-xs">Student ID:</span>
-                <span className="font-mono text-purple-400 font-bold text-sm bg-purple-500/10 px-2 py-0.5 rounded-lg border border-purple-500/20">{sp.student_id}</span>
+                <span className="font-mono text-purple-400 font-bold text-sm bg-purple-500/10 px-2 py-0.5 rounded-lg border border-purple-500/20">{sp.user_id}</span>
               </div>
             ) : (
               <p className="text-zinc-600 text-xs mt-2">Student ID will be assigned after admission approval</p>

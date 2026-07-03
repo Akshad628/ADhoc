@@ -22,7 +22,7 @@ const catColors: Record<string, string> = {
   'Leadership': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   'Other': 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
 }
-const EMPTY: CreateAchievementRequest = { title: '', category: 'Other', description: '', date: '' }
+const EMPTY: CreateAchievementRequest = { achievement_title: '', achievement_type: 'Other', description: '', achievement_date: '' }
 
 interface AchievementsTabProps {
   achievements: StudentAchievement[]
@@ -38,7 +38,7 @@ export default function AchievementsTab({ achievements, onRefresh }: Achievement
   const set = (k: keyof CreateAchievementRequest, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.title) { toast.error('Title required'); return }
+    if (!form.achievement_title || !form.achievement_type) { toast.error('Title and Category are required'); return }
     setSaving(true)
     try {
       const endpoint = editId ? `/api/student/achievements/${editId}` : '/api/student/achievements'
@@ -53,12 +53,12 @@ export default function AchievementsTab({ achievements, onRefresh }: Achievement
 
   const openEdit = (a: StudentAchievement) => {
     setEditId(a.id)
-    setForm({ title: a.title, category: a.category || '', description: a.description || '', date: a.date?.split('T')[0] || '' })
+    setForm({ achievement_title: a.achievement_title, achievement_type: a.achievement_type || '', description: a.description || '', achievement_date: a.achievement_date?.split('T')[0] || '' })
     setShowForm(true)
   }
 
-  const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Delete "${title}"?`)) return
+  const handleDelete = async (id: string, achievement_title: string) => {
+    if (!confirm(`Delete "${achievement_title}"?`)) return
     try {
       const res = await apiFetch(`/api/student/achievements/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
@@ -85,17 +85,17 @@ export default function AchievementsTab({ achievements, onRefresh }: Achievement
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
                 <label className="block text-zinc-400 text-xs font-medium mb-1.5">Title *</label>
-                <input className={INPUT_CLASS} value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. 1st Place Smart India Hackathon" />
+                <input className={INPUT_CLASS} value={form.achievement_title} onChange={e => set('achievement_title', e.target.value)} placeholder="e.g. 1st Place Smart India Hackathon" />
               </div>
               <div>
-                <label className="block text-zinc-400 text-xs font-medium mb-1.5">Category</label>
-                <select className={INPUT_CLASS} value={form.category} onChange={e => set('category', e.target.value)}>
+                <label className="block text-zinc-400 text-xs font-medium mb-1.5">Category *</label>
+                <select className={INPUT_CLASS} value={form.achievement_type} onChange={e => set('achievement_type', e.target.value)}>
                   {ACH_CATEGORIES.map(c => <option key={c} value={c} className="bg-[#1a1a2e]">{c}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-zinc-400 text-xs font-medium mb-1.5">Date</label>
-                <input type="date" className={INPUT_CLASS} value={form.date} onChange={e => set('date', e.target.value)} />
+                <input type="date" className={INPUT_CLASS} value={form.achievement_date} onChange={e => set('achievement_date', e.target.value)} />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-zinc-400 text-xs font-medium mb-1.5">Description</label>
@@ -123,16 +123,16 @@ export default function AchievementsTab({ achievements, onRefresh }: Achievement
               className="glass rounded-2xl p-4 hover:bg-white/[0.03] transition-colors group">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  {ach.category && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${catColors[ach.category] || catColors['Other']}`}>{ach.category}</span>
+                  {ach.achievement_type && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${catColors[ach.achievement_type] || catColors['Other']}`}>{ach.achievement_type}</span>
                   )}
-                  <h3 className="text-white font-semibold text-sm mt-2">{ach.title}</h3>
-                  {ach.date && <p className="text-zinc-500 text-xs mt-0.5">{new Date(ach.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>}
+                  <h3 className="text-white font-semibold text-sm mt-2">{ach.achievement_title}</h3>
+                  {ach.achievement_date && <p className="text-zinc-500 text-xs mt-0.5">{new Date(ach.achievement_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>}
                   {ach.description && <p className="text-zinc-400 text-xs mt-1.5 leading-relaxed">{ach.description}</p>}
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                   <button onClick={() => openEdit(ach)} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white"><Edit className="w-3 h-3" /></button>
-                  <button onClick={() => handleDelete(ach.id, ach.title)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
+                  <button onClick={() => handleDelete(ach.id, ach.achievement_title ?? ach.achievement_title ?? '')} className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
                 </div>
               </div>
             </motion.div>

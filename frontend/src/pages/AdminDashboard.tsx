@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LayoutDashboard, Phone, BookOpen, LogOut, Search, Bell, Users, GraduationCap, Clock, CheckCircle, Mic, PhoneCall, Settings, Calendar } from 'lucide-react'
+import { LayoutDashboard, Phone, BookOpen, LogOut, Search, Bell, Users, GraduationCap, Clock, CheckCircle, Mic, PhoneCall, Settings, Calendar, Award } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useCalls } from '../hooks/useCalls'
 import { apiFetch } from '../hooks/useApi'
 import CallConsolePage from './admin/CallConsolePage'
 import MeetingsPage from './MeetingsPage'
+import AdminScholarshipsPage from './admin/AdminScholarshipsPage'
 import toast from 'react-hot-toast'
 
 function DashboardHome() {
@@ -886,6 +887,7 @@ export default function AdminDashboard() {
     { path: '/admin/knowledge', label: 'Knowledge Base', icon: BookOpen },
     { path: '/admin/telephony', label: 'Telephony', icon: Phone },
     { path: '/admin/meetings', label: 'Meetings', icon: Calendar },
+    { path: '/admin/scholarships', label: 'Scholarships', icon: Award },
   ]
   return (
     <div className="min-h-screen bg-transparent flex">
@@ -935,10 +937,11 @@ export default function AdminDashboard() {
             <Route path="/" element={<DashboardHome />} />
             <Route path="/knowledge" element={<KnowledgeBasePage />} />
 
-            <Route path="/telephony" element={<TelephonyPage />} />
+             <Route path="/telephony" element={<TelephonyPage />} />
             <Route path="/voice-agents" element={<VoiceAgentsPage />} />
             <Route path="/call-console" element={<CallConsolePage />} />
             <Route path="/meetings/*" element={<MeetingsPage />} />
+            <Route path="/scholarships/*" element={<AdminScholarshipsPage />} />
           </Routes>
         </div>
       </main>
