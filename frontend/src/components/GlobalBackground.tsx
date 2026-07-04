@@ -122,7 +122,7 @@ export default function GlobalBackground() {
 
     // 6. Animation Variables
     let animationFrameId: number
-    const clock = new THREE.Clock()
+    const startTime = performance.now()
 
     // Smooth camera target offsets
     let currentCamX = 0
@@ -130,7 +130,7 @@ export default function GlobalBackground() {
 
     // Render loop
     const tick = () => {
-      const elapsedTime = clock.getElapsedTime()
+      const elapsedTime = (performance.now() - startTime) / 1000
 
       // Slow drift for grid to simulate moving forward
       gridGroup.position.z = (elapsedTime * 1.5) % gridSpacing

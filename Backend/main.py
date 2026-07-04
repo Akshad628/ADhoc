@@ -1620,6 +1620,116 @@ async def get_analytics_top_agents(current_user: dict = Depends(get_current_user
     sorted_agents = sorted(agent_counts.values(), key=lambda x: x["calls"], reverse=True)
     return sorted_agents[:5]
 
+# ─── VOICE CHAT ENDPOINTS (STT & TTS) ───────────────────────────────────────
+class TTSRequest(BaseModel):
+    text: str
+
+@app.post("/api/voice/transcribe")
+async def voice_transcribe(file: UploadFile = File(...)):
+    """Transcribe user audio using Deepgram, fallback to Groq Whisper"""
+    audio_bytes = await file.read()
+    
+    if DEEPGRAM_API_KEY:
+        try:
+            url = "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true"
+            headers = {
+                "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                "Content-Type": file.content_type or "audio/webm"
+            }
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, content=audio_bytes, timeout=60)
+                if response.status_code == 200:
+                    data = response.json()
+                    transcript = data["results"]["channels"][0]["alternatives"][0]["transcript"]
+                    if transcript:
+                        return {"text": transcript}
+                else:
+                    print(f"Deepgram STT error: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"Deepgram STT failed: {e}")
+            
+    # Fallback to Groq Whisper
+    try:
+        tmp_path = tempfile.mktemp(suffix=".webm")
+        with open(tmp_path, "wb") as f:
+            f.write(audio_bytes)
+        try:
+            with open(tmp_path, "rb") as f:
+                transcript = groq_client.audio.transcriptions.create(
+                    file=("audio.webm", f),
+                    model="whisper-large-v3-turbo",
+                    response_format="text"
+                )
+            return {"text": str(transcript) if transcript else ""}
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"Groq transcription fallback failed: {e}")
+        return {"text": ""}
+
+def add_wav_header(pcm_data: bytes, sample_rate: int = 24000) -> bytes:
+    import struct
+    header = bytearray(44)
+    struct.pack_into('<4s', header, 0, b'RIFF')
+    struct.pack_into('<I', header, 4, 36 + len(pcm_data))
+    struct.pack_into('<4s', header, 8, b'WAVE')
+    struct.pack_into('<4s', header, 12, b'fmt ')
+    struct.pack_into('<I', header, 16, 16)
+    struct.pack_into('<H', header, 20, 1)
+    struct.pack_into('<H', header, 22, 1)
+    struct.pack_into('<I', header, 24, sample_rate)
+    struct.pack_into('<I', header, 28, sample_rate * 2)
+    struct.pack_into('<H', header, 32, 2)
+    struct.pack_into('<H', header, 34, 16)
+    struct.pack_into('<4s', header, 36, b'data')
+    struct.pack_into('<I', header, 40, len(pcm_data))
+    return bytes(header) + pcm_data
+
+@app.post("/api/voice/tts")
+async def voice_tts(request: TTSRequest):
+    """Convert text to speech using ElevenLabs, fallback to Deepgram"""
+    audio_bytes = b""
+    is_mp3 = False
+    
+    if ELEVENLABS_API_KEY:
+        try:
+            url = "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL/stream"
+            headers = {
+                "xi-api-key": ELEVENLABS_API_KEY,
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "text": request.text,
+                "model_id": "eleven_turbo_v2_5",
+                "output_format": "mp3_44100_128"
+            }
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, json=payload, timeout=60)
+                if response.status_code == 200:
+                    audio_bytes = response.content
+                    is_mp3 = True
+        except Exception as e:
+            print(f"ElevenLabs TTS failed: {e}")
+            
+    if not audio_bytes:
+        # Fallback to existing text_to_speech method (which returns raw PCM from Deepgram or Elevenlabs)
+        try:
+            pcm_bytes = await guidance_engine.text_to_speech(request.text)
+            if pcm_bytes:
+                audio_bytes = add_wav_header(pcm_bytes, 24000)
+        except Exception as e:
+            print(f"Fallback TTS failed: {e}")
+            
+    if not audio_bytes:
+        raise HTTPException(status_code=500, detail="Failed to generate speech audio")
+        
+    media_type = "audio/mpeg" if is_mp3 else "audio/wav"
+    return Response(content=audio_bytes, media_type=media_type)
+
 # ─── TEXT CHAT ENDPOINT (Fallback) ──────────────────────────────────────────
 @app.post("/api/chat")
 async def text_chat(message: Dict[str, str], current_user: dict = Depends(get_current_user)):
@@ -2976,7 +3086,7 @@ async def apply_scholarship(scholarship_id: str, current_user: dict = Depends(ge
     result = supabase.table("scholarship_applications").insert({
         "scholarship_id": scholarship_id,
         "student_id": uid,
-        "application_status": "pending",
+        "application_status": "Applied",
         "application_date": datetime.utcnow().isoformat(),
         "created_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat()

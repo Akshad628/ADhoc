@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LayoutDashboard, GraduationCap, FileText, Award, BookOpen, Map, LogOut, Search, Bell, Clock, CheckCircle, Building2, TrendingUp, AlertCircle, Upload, Calendar, ClipboardList } from 'lucide-react'
+import { LayoutDashboard, GraduationCap, FileText, Award, BookOpen, Map, LogOut, Search, Bell, Clock, CheckCircle, Building2, TrendingUp, AlertCircle, Upload, Calendar, ClipboardList,  Mic, } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { apiFetch } from '../hooks/useApi'
@@ -65,67 +65,300 @@ function CareerAssistant() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const recognitionRef = useRef<any>(null)
+  const audioTimeoutRef = useRef<any>(null)
 
   useEffect(() => {
-  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-}, [messages, loading])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
 
-  const sendMessage = async () => {
-  if (!input.trim() || loading) return;
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ""
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop())
+      }
+      if (audioTimeoutRef.current) {
+        clearTimeout(audioTimeoutRef.current)
+      }
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop() } catch (e) {}
+      }
+    }
+  }, [])
 
-  const userMessage = input;
-
-  // Show user's message immediately
-  setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
-  setInput('');
-  setLoading(true);
-
-  try {
-    const token = localStorage.getItem('token');
-
-    const response = await fetch('http://localhost:8000/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        message: userMessage,
-        session_id: 'career-assistant',
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get AI response');
+  const speak = async (text: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ""
+      audioRef.current = null
+    }
+    if (audioTimeoutRef.current) {
+      clearTimeout(audioTimeoutRef.current)
+      audioTimeoutRef.current = null
     }
 
-    const data = await response.json();
+    setVoiceState('speaking')
+    try {
+      const response = await fetch('http://localhost:8000/api/voice/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ text }),
+      })
 
-    setMessages(prev => [
-      ...prev,
-      {
-        role: 'agent',
-        text: data.response,
-      },
-    ]);
-    setLoading(false);
-  } catch (error) {
-    console.error(error);
+      if (!response.ok) {
+        throw new Error('TTS generation failed')
+      }
 
-    setLoading(false);
+      const audioBlob = await response.blob()
+      const audioUrl = URL.createObjectURL(audioBlob)
+      const audio = new Audio(audioUrl)
+      audioRef.current = audio
 
-    setMessages(prev => [
-      ...prev,
-      {
-        role: 'agent',
-        text: 'Sorry, something went wrong while contacting the AI.',
-      },
-    ]);
+      audio.onended = () => {
+        setVoiceState('idle')
+        URL.revokeObjectURL(audioUrl)
+      }
 
-    toast.error('Unable to contact the AI server. Please check your internet or try again.');
+      audio.onerror = (e) => {
+        console.error("Audio playback error:", e)
+        toast.error("Audio playback failed.")
+        setVoiceState('idle')
+      }
+
+      await audio.play()
+    } catch (e) {
+      console.error("Speech synthesis failed:", e)
+      toast.error("Speech synthesis failed.")
+      setVoiceState('idle')
+    }
   }
-};
+
+  const startListening = async () => {
+    if (voiceState !== 'idle') {
+      if (voiceState === 'listening') {
+        stopListening()
+      }
+      return
+    }
+
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ""
+      audioRef.current = null
+    }
+
+    setVoiceState('listening')
+    audioChunksRef.current = []
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      mediaStreamRef.current = stream
+    } catch (err) {
+      console.error("Microphone access denied:", err)
+      toast.error("Microphone permission denied or unavailable.")
+      setVoiceState('idle')
+      return
+    }
+
+    let mediaRecorder: MediaRecorder
+    try {
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+    } catch (e) {
+      try {
+        mediaRecorder = new MediaRecorder(stream)
+      } catch (e2) {
+        console.error("MediaRecorder unsupported:", e2)
+        toast.error("Speech capture is not supported by your browser.")
+        stream.getTracks().forEach(t => t.stop())
+        setVoiceState('idle')
+        return
+      }
+    }
+
+    mediaRecorderRef.current = mediaRecorder
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunksRef.current.push(event.data)
+      }
+    }
+
+    mediaRecorder.onstop = async () => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+      }
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' })
+      audioChunksRef.current = []
+
+      if (audioBlob.size < 1000) {
+        setVoiceState('idle')
+        return
+      }
+
+      setVoiceState('thinking')
+      try {
+        const formData = new FormData()
+        formData.append('file', audioBlob, 'audio.webm')
+
+        const response = await fetch('http://localhost:8000/api/voice/transcribe', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error('Transcription failed')
+        }
+
+        const data = await response.json()
+        const text = data.text
+
+        if (!text || !text.trim()) {
+          toast.error("No speech detected.")
+          setVoiceState('idle')
+          return
+        }
+
+        await sendMessage(text)
+      } catch (err) {
+        console.error("Transcription error:", err)
+        toast.error("Speech transcription failed.")
+        setVoiceState('idle')
+      }
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition
+
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition()
+        recognition.lang = "en-US"
+        recognition.interimResults = false
+        recognition.maxAlternatives = 1
+        recognitionRef.current = recognition
+
+        recognition.onresult = () => {
+          stopListening()
+        }
+
+        recognition.onerror = (e: any) => {
+          console.warn("SpeechRecognition warning:", e.error)
+          if (e.error === 'not-allowed') {
+            stopListening()
+          }
+        }
+
+        recognition.onend = () => {
+          stopListening()
+        }
+
+        recognition.start()
+      } catch (recognitionErr) {
+        console.warn("SpeechRecognition startup skipped:", recognitionErr)
+      }
+    }
+
+    mediaRecorder.start()
+
+    audioTimeoutRef.current = setTimeout(() => {
+      stopListening()
+    }, 10000)
+  }
+
+  const stopListening = () => {
+    if (audioTimeoutRef.current) {
+      clearTimeout(audioTimeoutRef.current)
+      audioTimeoutRef.current = null
+    }
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch (e) {}
+      recognitionRef.current = null
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop() } catch (e) {}
+      mediaRecorderRef.current = null
+    }
+  }
+
+  const sendMessage = async (voiceText?: string) => {
+    const userMessage = voiceText ?? input;
+
+    if (!userMessage.trim() || loading) return;
+
+    setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const response = await fetch('http://localhost:8000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          session_id: 'career-assistant',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get AI response');
+      }
+
+      const data = await response.json();
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'agent',
+          text: data.response,
+        },
+      ]);
+      setLoading(false);
+      await speak(data.response);
+
+    } catch (error) {
+      console.error(error);
+      setLoading(false);
+      setVoiceState('idle');
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'agent',
+          text: 'Sorry, something went wrong while contacting the AI.',
+        },
+      ]);
+
+      toast.error('Unable to contact the AI server. Please check your internet or try again.');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -171,23 +404,63 @@ function CareerAssistant() {
 )}
           <div ref={messagesEndRef} />
         </div>
-        <div className="flex gap-2">
-          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Ask about careers, courses, colleges..."
-            className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl py-3 px-4 text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 hover:border-white/20 transition-all" />
+        <div className="flex gap-2 items-center">
           <button
-  onClick={sendMessage}
-  disabled={loading}
-  className={`px-6 py-3 rounded-xl font-medium transition-all shadow-md border border-white/10 ${
-    loading
-      ? "bg-zinc-700 cursor-not-allowed opacity-60"
-      : "bg-gradient-to-r from-purple-600 via-pink-500 to-purple-500 hover:border-purple-300/30 glow-purple"
-  } text-white`}
->
-  {loading ? "Thinking..." : "Send"}
-</button>
+            onClick={startListening}
+            disabled={voiceState !== 'idle' && voiceState !== 'listening'}
+            className={`self-stretch w-[48px] flex items-center justify-center shrink-0 rounded-xl border border-white/10 transition-all ${
+              voiceState === 'listening'
+                ? "bg-red-500/80 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.7)] animate-pulse text-white"
+                : voiceState !== 'idle'
+                ? "bg-zinc-700/20 border-white/5 opacity-50 cursor-not-allowed text-zinc-500"
+                : "bg-white/[0.03] hover:bg-gradient-to-r hover:from-purple-600 hover:via-pink-500 hover:to-purple-500 hover:border-purple-300/30 hover:shadow-[0_0_40px_rgba(139,92,246,0.3),0_0_80px_rgba(139,92,246,0.1)] text-white"
+            }`}
+          >
+            <Mic className={voiceState === 'listening' ? 'text-white' : 'text-zinc-400 group-hover:text-white'} size={20} />
+          </button>
+
+          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            disabled={loading || voiceState !== 'idle'}
+            placeholder={
+              voiceState === 'listening'
+                ? "Listening..."
+                : voiceState === 'thinking'
+                ? "Thinking..."
+                : voiceState === 'speaking'
+                ? "AI is speaking..."
+                : "Ask about careers, courses, colleges..."
+            }
+            className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl py-3 px-4 text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 hover:border-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed" />
+
+          <button
+            onClick={() => sendMessage()}
+            disabled={loading || voiceState !== 'idle'}
+            className={`px-6 py-3 rounded-xl font-medium transition-all shadow-md border border-white/10 ${
+              loading || voiceState !== 'idle'
+                ? "bg-zinc-700 cursor-not-allowed opacity-60"
+                : "bg-gradient-to-r from-purple-600 via-pink-500 to-purple-500 hover:border-purple-300/30 glow-purple"
+            } text-white`}
+          >
+            {loading ? "Thinking..." : "Send"}
+          </button>
         </div>
       </div>
+      {voiceState === 'listening' && (
+        <p className="mt-2 text-sm text-red-400 animate-pulse flex items-center gap-1.5 justify-center">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+          🎤 Listening... Speak now
+        </p>
+      )}
+      {voiceState === 'thinking' && (
+        <p className="mt-2 text-sm text-yellow-400 animate-pulse flex items-center gap-1.5 justify-center">
+          ⚡ Processing voice...
+        </p>
+      )}
+      {voiceState === 'speaking' && (
+        <p className="mt-2 text-sm text-cyan-400 animate-pulse flex items-center gap-1.5 justify-center">
+          🔊 AI is speaking...
+        </p>
+      )}
     </div>
   )
 }
