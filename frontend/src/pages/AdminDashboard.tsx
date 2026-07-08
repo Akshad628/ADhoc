@@ -305,9 +305,60 @@ function VoiceAgentsPage() {
   const [selectedAgent, setSelectedAgent] = useState(0)
   const [isListening, setIsListening] = useState(false)
 
+  const [groqKeyInput, setGroqKeyInput] = useState('')
+  const [groqKeyConfigured, setGroqKeyConfigured] = useState(false)
+  const [groqMaskedKey, setGroqMaskedKey] = useState('')
+
   useEffect(() => {
     loadAgents()
+    loadGroqKeyStatus()
   }, [])
+
+  const loadGroqKeyStatus = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:8000/api/settings/groq-key', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setGroqKeyConfigured(data.configured)
+        setGroqMaskedKey(data.masked_key)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const saveGroqKey = async () => {
+    if (!groqKeyInput.trim()) {
+      toast.error('Key cannot be empty')
+      return
+    }
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:8000/api/settings/groq-key', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ groq_api_key: groqKeyInput })
+      })
+      if (response.ok) {
+        toast.success('Groq API Key updated successfully!')
+        setGroqKeyInput('')
+        loadGroqKeyStatus()
+      } else {
+        toast.error('Failed to update key')
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Error updating key')
+    }
+  }
 
   const loadAgents = async () => {
     try {
@@ -414,6 +465,31 @@ function VoiceAgentsPage() {
           Make Calls
         </button>
       </div>
+
+      <div className="glass rounded-2xl p-6 border border-white/5 bg-black/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Groq API Configuration</h2>
+          <p className="text-sm text-zinc-400">
+            {groqKeyConfigured ? `Current Key: ${groqMaskedKey}` : 'Groq API Key is not configured.'}
+          </p>
+        </div>
+        <div className="flex gap-3 max-w-md w-full">
+          <input
+            type="password"
+            placeholder="Paste your Groq API Key (gsk_...)"
+            value={groqKeyInput}
+            onChange={(e) => setGroqKeyInput(e.target.value)}
+            className="flex-1 h-11 px-4 rounded-xl border border-white/10 bg-black/40 text-sm text-white outline-none focus:border-purple-500/60 focus:ring-2 focus:ring-purple-500/20"
+          />
+          <button
+            onClick={saveGroqKey}
+            className="h-11 px-5 rounded-xl bg-purple-600 hover:bg-purple-500 text-sm font-semibold text-white shadow-lg transition-all"
+          >
+            Save Key
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2 space-y-3">
           <p className="text-xs text-zinc-500 font-medium tracking-wider mb-2">PICK AN AGENT</p>

@@ -4,53 +4,22 @@ import { Link } from 'react-router-dom'
 import { Phone, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
-
-// ─── CONFIG ──────────────────────────────────────────────────────────
-const SAMPLE_RATE = 24000
-const MIC_SAMPLE_RATE = 16000
+import { VoiceTransportFactory, VoiceTransport } from '../services/voice/VoiceTransportFactory'
 
 // ─── COMPONENT ───────────────────────────────────────────────────────
 export default function VoiceCallPage() {
   const { user } = useAuth()
-  const [callState, setCallState] = useState<'idle'|'connecting'|'active'|'ended'>('idle')
+  const [callState, setCallState] = useState<'idle' | 'connecting' | 'active' | 'ended'>('idle')
   const [timer, setTimer] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
-  const [messages, setMessages] = useState<{role: 'agent'|'caller', text: string}[]>([])
+  const [messages, setMessages] = useState<{ role: 'agent' | 'caller', text: string }[]>([])
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false)
   const [isUserSpeaking, setIsUserSpeaking] = useState(false)
-  const [callStatus, setCallStatus] = useState<'listening'|'processing'|'speaking'|'idle'>('idle')
+  const [callStatus, setCallStatus] = useState<'listening' | 'processing' | 'speaking' | 'idle'>('idle')
 
-  const wsRef = useRef<WebSocket | null>(null)
-
-  // Use a single persistent AudioContext
-  const audioContextRef = useRef<AudioContext | null>(null)
-
-  // AudioWorkletNode reference (replaces deprecated ScriptProcessorNode)
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null)
-  const mediaStreamRef = useRef<MediaStream | null>(null)
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sessionIdRef = useRef<string>(`session_${Date.now()}`)
-
-  // Audio queue for smooth playback with single AudioContext
-  const audioQueueRef = useRef<Int16Array[]>([])
-  const isPlayingRef = useRef(false)
-
-  // Track if we should be sending audio (prevent sending while AI is speaking)
-  const shouldSendAudioRef = useRef(true)
-
-  // Audio accumulation buffer for smoother playback
-  const audioAccumRef = useRef<Int16Array[]>([])
-  const ACCUM_TARGET_MS = 150
-
-  // Mic audio buffer for sending larger chunks
-  const micBufferRef = useRef<number[]>([])
-  const lastSendTimeRef = useRef(0)
-  const SEND_INTERVAL_MS = 500
-
-  // FIX: Track when user started speaking to prevent premature processing
-  const userSpeakingStartRef = useRef<number | null>(null)
-  const MIN_USER_SPEAKING_MS = 1500
+  const transportRef = useRef<VoiceTransport | null>(null)
 
   // Timer
   useEffect(() => {
@@ -66,129 +35,24 @@ export default function VoiceCallPage() {
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
   }
 
-  // Initialize single AudioContext on call start
-  const initAudioContext = async () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext({ sampleRate: SAMPLE_RATE })
-    }
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume()
-    }
-  }
-
-  // Play audio from Int16Array PCM data using single AudioContext
-  const playAudioChunk = async (int16Data: Int16Array): Promise<void> => {
-    return new Promise((resolve) => {
+  // End call helper
+  const endCall = useCallback(async () => {
+    if (transportRef.current) {
       try {
-        const ctx = audioContextRef.current
-        if (!ctx) {
-          resolve()
-          return
-        }
-
-        const floatData = new Float32Array(int16Data.length)
-        for (let i = 0; i < int16Data.length; i++) {
-          floatData[i] = int16Data[i] / 32768.0
-        }
-
-        const audioBuffer = ctx.createBuffer(1, floatData.length, SAMPLE_RATE)
-        audioBuffer.copyToChannel(floatData, 0)
-
-        const source = ctx.createBufferSource()
-        source.buffer = audioBuffer
-        source.connect(ctx.destination)
-
-        source.onended = () => { resolve() }
-        source.start(0)
-
-      } catch (err) {
-        console.error('Audio playback error:', err)
-        resolve()
+        await transportRef.current.disconnect()
+      } catch (e) {
+        console.error("Error during transport disconnect", e)
       }
-    })
-  }
-
-  // Process audio queue with accumulation for smooth playback
-  const processAudioQueue = async () => {
-    if (isPlayingRef.current) return
-
-    isPlayingRef.current = true
-    setIsAgentSpeaking(true)
-    setCallStatus('speaking')
-
-    try {
-      while (audioQueueRef.current.length > 0 || audioAccumRef.current.length > 0) {
-        while (audioQueueRef.current.length > 0) {
-          const chunk = audioQueueRef.current.shift()
-          if (chunk) audioAccumRef.current.push(chunk)
-        }
-
-        const totalSamples = audioAccumRef.current.reduce((sum, c) => sum + c.length, 0)
-        const accumulatedMs = (totalSamples / SAMPLE_RATE) * 1000
-
-        if (accumulatedMs >= ACCUM_TARGET_MS || audioQueueRef.current.length === 0) {
-          if (totalSamples > 0) {
-            const concatenated = new Int16Array(totalSamples)
-            let offset = 0
-            for (const chunk of audioAccumRef.current) {
-              concatenated.set(chunk, offset)
-              offset += chunk.length
-            }
-            audioAccumRef.current = []
-            await playAudioChunk(concatenated)
-          }
-        }
-
-        if (audioQueueRef.current.length === 0 && audioAccumRef.current.length === 0) {
-          await new Promise(r => setTimeout(r, 50))
-        }
-      }
-    } catch (err) {
-      console.error('Queue processing error:', err)
-    } finally {
-      isPlayingRef.current = false
-      setIsAgentSpeaking(false)
-      // FIX: Clear any accumulated mic data that came in during AI speech
-      micBufferRef.current = []
-      lastSendTimeRef.current = Date.now()
-      // Re-enable audio sending after AI finishes
-      shouldSendAudioRef.current = true
-      setIsUserSpeaking(false)
-      setCallStatus('listening')
+      transportRef.current = null
     }
-  }
 
-  // AudioWorklet processor code as a Blob URL
-  const createAudioWorkletProcessor = () => {
-    const processorCode = `
-      class MicProcessor extends AudioWorkletProcessor {
-        constructor() {
-          super();
-          this.buffer = [];
-        }
+    setCallState('ended')
+    setIsAgentSpeaking(false)
+    setIsUserSpeaking(false)
+    setCallStatus('idle')
+  }, [])
 
-        process(inputs, outputs, parameters) {
-          const input = inputs[0];
-          if (input && input[0]) {
-            const channelData = input[0];
-            const int16Data = new Int16Array(channelData.length);
-            for (let i = 0; i < channelData.length; i++) {
-              int16Data[i] = Math.max(-1, Math.min(1, channelData[i])) * 0x7FFF;
-            }
-            this.port.postMessage(int16Data);
-          }
-          return true;
-        }
-      }
-
-      registerProcessor('mic-processor', MicProcessor);
-    `;
-
-    const blob = new Blob([processorCode], { type: 'application/javascript' });
-    return URL.createObjectURL(blob);
-  }
-
-  // Start call with WebSocket
+  // Start call with fallback architecture
   const startCall = useCallback(async () => {
     if (!user) {
       toast.error('Please sign in first')
@@ -201,250 +65,111 @@ export default function VoiceCallPage() {
     setIsAgentSpeaking(false)
     setIsUserSpeaking(false)
     setCallStatus('idle')
-
-    await initAudioContext()
+    sessionIdRef.current = `session_${Date.now()}`
 
     const sessionId = sessionIdRef.current
-    const ws = new WebSocket(`ws://localhost:8000/ws/voice/${sessionId}`)
-    ws.binaryType = 'arraybuffer'
+    const backendUrl = "http://localhost:8000"
 
-    ws.onopen = () => {
-      console.log('WebSocket connected')
-      setCallState('active')
-      setCallStatus('listening')
-      toast.success('Connected to AI Agent')
-      startAudioCapture(ws)
-    }
-
-    ws.onmessage = async (event) => {
-      try {
-        const data = JSON.parse(event.data)
-
-        if (data.type === 'transcript') {
-          setMessages(prev => [...prev, { role: 'caller', text: data.text }])
-          setIsUserSpeaking(false)
-          setCallStatus('processing')
-        } else if (data.type === 'ai_response') {
-          setMessages(prev => [...prev, { role: 'agent', text: data.text }])
-          // Pause audio sending while AI is responding
-          shouldSendAudioRef.current = false
-          // FIX: Clear mic buffer so old audio doesn't get sent after AI finishes
-          micBufferRef.current = []
-          userSpeakingStartRef.current = null
-        } else if (data.type === 'audio') {
-          try {
-            const binary = atob(data.data)
-            const bytes = new Uint8Array(binary.length)
-            for (let i = 0; i < binary.length; i++) {
-              bytes[i] = binary.charCodeAt(i)
-            }
-
-            let byteLength = bytes.length
-            if (byteLength % 2 !== 0) {
-              byteLength -= 1
-            }
-
-            if (byteLength >= 2) {
-              const int16Data = new Int16Array(bytes.buffer, 0, byteLength / 2)
-              audioQueueRef.current.push(int16Data)
-
-              if (!isPlayingRef.current) {
-                processAudioQueue()
-              }
-            }
-          } catch (decodeErr) {
-            console.error('Audio decode error:', decodeErr)
-          }
-        }
-      } catch (err) {
-        console.error('Message parse error:', err)
-      }
-    }
-
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err)
-      toast.error('Connection error')
-      setCallState('idle')
-      setCallStatus('idle')
-    }
-
-    ws.onclose = () => {
-      console.log('WebSocket closed')
-      if (callState !== 'ended') {
-        setCallState('ended')
-        setCallStatus('idle')
-      }
-    }
-
-    wsRef.current = ws
-  }, [user])
-
-  // Capture audio from mic using AudioWorkletNode
-  const startAudioCapture = async (ws: WebSocket) => {
+    let useWebRTC = false
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { 
-          sampleRate: MIC_SAMPLE_RATE, 
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        } 
-      })
-      mediaStreamRef.current = stream
-
-      const audioContext = audioContextRef.current
-      if (!audioContext) {
-        throw new Error('AudioContext not initialized')
+      const response = await fetch(`${backendUrl}/api/voice/fastrtc-status`)
+      if (response.ok) {
+        const status = await response.json()
+        useWebRTC = status.available && status.stream_ready
       }
+    } catch (e) {
+      console.warn("FastRTC status check failed, using WebSocket fallback:", e)
+    }
 
-      const processorUrl = createAudioWorkletProcessor()
-      try {
-        await audioContext.audioWorklet.addModule(processorUrl)
-      } catch (err) {
-        console.error('Failed to load AudioWorklet:', err)
-        fallbackScriptProcessor(ws, audioContext, stream)
-        return
-      }
+    const tryConnect = async (type: "fastrtc" | "websocket") => {
+      const client = VoiceTransportFactory.create(type, backendUrl)
+      transportRef.current = client
 
-      const source = audioContext.createMediaStreamSource(stream)
-      sourceRef.current = source
-
-      const workletNode = new AudioWorkletNode(audioContext, 'mic-processor', {
-        processorOptions: { bufferSize: 4096 }
-      })
-      workletNodeRef.current = workletNode
-
-      source.connect(workletNode)
-
-      // Handle messages from worklet
-      workletNode.port.onmessage = (e) => {
-        if (ws.readyState !== WebSocket.OPEN || isMuted || !shouldSendAudioRef.current) return
-
-        const int16Data = e.data as Int16Array
-
-        // FIX: Track when user started speaking
-        if (userSpeakingStartRef.current === null && int16Data.length > 0) {
-          userSpeakingStartRef.current = Date.now()
-        }
-
-        // Add to buffer
-        for (let i = 0; i < int16Data.length; i++) {
-          micBufferRef.current.push(int16Data[i])
-        }
-
-        // Send in larger chunks (500ms) for better transcription
-        const now = Date.now()
-        if (now - lastSendTimeRef.current >= SEND_INTERVAL_MS && micBufferRef.current.length > 0) {
-          const chunk = new Int16Array(micBufferRef.current)
-          ws.send(chunk.buffer)
-          micBufferRef.current = []
-          lastSendTimeRef.current = now
-
-          setIsUserSpeaking(true)
-          if (callStatus !== 'speaking') {
-            setCallStatus('listening')
+      client.setEvents({
+        onStateChange: (state) => {
+          if (state === "connecting") setCallState("connecting")
+          if (state === "connected") {
+            setCallState("active")
+            setCallStatus("listening")
+            toast.success(`Connected to AI Agent (${type === "fastrtc" ? "WebRTC" : "WebSocket"})`)
           }
+          if (state === "error") {
+            setCallState("idle")
+            setCallStatus("idle")
+          }
+          if (state === "disconnected") {
+            setCallState("ended")
+            setCallStatus("idle")
+          }
+        },
+        onTranscript: (msg) => {
+          const role = msg.role === 'assistant' || msg.role === 'agent' ? 'agent' : 'caller';
+          setMessages(prev => [...prev, { role, text: msg.text }]);
+          if (role === 'caller') {
+            setIsUserSpeaking(false);
+            setCallStatus('processing');
+          }
+        },
+        onAudio: (chunk) => {
+          setIsAgentSpeaking(true)
+          setCallStatus('speaking')
+          const duration = (chunk.pcm.length / chunk.sampleRate) * 1000
+          setTimeout(() => {
+            setIsAgentSpeaking(false)
+            setCallStatus('listening')
+          }, duration)
+        },
+        onError: (err) => {
+          console.error(`${type} transport error:`, err)
+        },
+        onDisconnected: () => {
+          endCall()
         }
-      }
+      })
 
+      await client.connect(sessionId)
+    }
+
+    try {
+      if (useWebRTC) {
+        console.log("Attempting WebRTC connection...")
+        await tryConnect("fastrtc")
+      } else {
+        console.log("FastRTC not available, using WebSocket...")
+        await tryConnect("websocket")
+      }
     } catch (err) {
-      console.error('Audio capture error:', err)
-      toast.error('Microphone access denied. Please allow microphone permissions.')
-      endCall()
-    }
-  }
-
-  // Fallback ScriptProcessorNode for older browsers
-  const fallbackScriptProcessor = (ws: WebSocket, audioContext: AudioContext, stream: MediaStream) => {
-    console.warn('Using fallback ScriptProcessorNode - AudioWorklet not available')
-    const source = audioContext.createMediaStreamSource(stream)
-    sourceRef.current = source
-
-    const processor = audioContext.createScriptProcessor(4096, 1, 1)
-
-    source.connect(processor)
-
-    processor.onaudioprocess = (e) => {
-      if (ws.readyState !== WebSocket.OPEN || isMuted || !shouldSendAudioRef.current) return
-
-      const inputData = e.inputBuffer.getChannelData(0)
-      const int16Data = float32ToInt16(inputData)
-
-      if (userSpeakingStartRef.current === null && int16Data.length > 0) {
-        userSpeakingStartRef.current = Date.now()
-      }
-
-      for (let i = 0; i < int16Data.length; i++) {
-        micBufferRef.current.push(int16Data[i])
-      }
-
-      const now = Date.now()
-      if (now - lastSendTimeRef.current >= SEND_INTERVAL_MS && micBufferRef.current.length > 0) {
-        const chunk = new Int16Array(micBufferRef.current)
-        ws.send(chunk.buffer)
-        micBufferRef.current = []
-        lastSendTimeRef.current = now
-
-        setIsUserSpeaking(true)
-        if (callStatus !== 'speaking') {
-          setCallStatus('listening')
+      console.warn("Failed to connect with primary transport, falling back to WebSocket...", err)
+      try {
+        if (useWebRTC) {
+          toast("WebRTC connection failed. Falling back to WebSocket failsafe...")
+          await tryConnect("websocket")
+        } else {
+          toast.error("Failed to connect")
+          setCallState("idle")
         }
+      } catch (fallbackErr) {
+        console.error("Fallback connection also failed:", fallbackErr)
+        toast.error("Connection failed")
+        setCallState("idle")
       }
     }
-  }
-
-  const float32ToInt16 = (float32Array: Float32Array): Int16Array => {
-    const int16Array = new Int16Array(float32Array.length)
-    for (let i = 0; i < float32Array.length; i++) {
-      int16Array[i] = Math.max(-1, Math.min(1, float32Array[i])) * 0x7FFF
-    }
-    return int16Array
-  }
-
-  const endCall = useCallback(() => {
-    if (workletNodeRef.current) {
-      try { workletNodeRef.current.disconnect() } catch (e) {}
-      workletNodeRef.current = null
-    }
-    if (sourceRef.current) {
-      try { sourceRef.current.disconnect() } catch (e) {}
-      sourceRef.current = null
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close()
-      audioContextRef.current = null
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(t => t.stop())
-      mediaStreamRef.current = null
-    }
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
-    }
-
-    micBufferRef.current = []
-    lastSendTimeRef.current = 0
-    userSpeakingStartRef.current = null
-
-    setCallState('ended')
-    setIsAgentSpeaking(false)
-    setIsUserSpeaking(false)
-    setCallStatus('idle')
-    audioQueueRef.current = []
-    audioAccumRef.current = []
-    isPlayingRef.current = false
-    shouldSendAudioRef.current = true
-  }, [])
+  }, [user, endCall])
 
   const handleMute = () => {
     const newMuted = !isMuted
     setIsMuted(newMuted)
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getAudioTracks().forEach(t => {
-        t.enabled = !newMuted
-      })
+    if (transportRef.current) {
+      const client = transportRef.current as any
+      if (typeof client.setMuted === "function") {
+        client.setMuted(newMuted)
+      } else {
+        if (newMuted) {
+          transportRef.current.stopMicrophone()
+        } else {
+          transportRef.current.startMicrophone()
+        }
+      }
     }
   }
 
@@ -489,12 +214,12 @@ export default function VoiceCallPage() {
             className="text-center flex flex-col items-center justify-center max-w-md glass-panel p-8 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-2xl">
             <h1 className="text-3xl font-extrabold mb-4 text-white tracking-tight">Try our AI Voice Agent</h1>
             <p className="text-zinc-400 mb-8 leading-relaxed text-sm">
-              Experience a real-time voice conversation with our Adhoc Agent. 
+              Experience a real-time voice conversation with our Adhoc Agent.
               Ask about colleges, courses, careers, and admissions.
             </p>
-            <motion.button 
-              whileHover={{ scale: 1.05, y: -2 }} 
-              whileTap={{ scale: 0.95 }} 
+            <motion.button
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
               onClick={startCall}
               className="w-24 h-24 rounded-full bg-gradient-to-r from-purple-600 via-pink-500 to-purple-500 flex items-center justify-center shadow-2xl shadow-purple-500/30 mx-auto hover:shadow-purple-500/50 transition-all border border-white/10 hover:border-purple-300/30 glow-purple"
             >
@@ -505,12 +230,12 @@ export default function VoiceCallPage() {
         )}
 
         {callState === 'connecting' && (
-          <motion.div key="connecting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+          <motion.div key="connecting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="text-center glass-panel p-8 rounded-3xl border border-white/10 shadow-2xl max-w-sm w-full">
             <div className="relative w-28 h-28 mx-auto mb-6">
               {[...Array(3)].map((_, i) => (
                 <motion.div key={i} className="absolute inset-0 rounded-full border-2 border-purple-500/30"
-                  animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0, 0.5] }} 
+                  animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0, 0.5] }}
                   transition={{ duration: 2, delay: i * 0.6, repeat: Infinity }} />
               ))}
               <div className="absolute inset-3 rounded-full bg-gradient-to-br from-purple-600 via-pink-500 to-purple-500 flex items-center justify-center shadow-lg border border-white/10">
@@ -556,10 +281,10 @@ export default function VoiceCallPage() {
               <div className="flex items-center justify-center gap-1 h-16 bg-white/[0.01] border border-white/5 rounded-2xl px-4 py-2">
                 {[...Array(40)].map((_, i) => (
                   <motion.div key={i} className="w-1 bg-gradient-to-t from-purple-500 via-pink-500 to-cyan-400 rounded-full shadow-[0_0_8px_rgba(139,92,246,0.3)]"
-                    animate={{ 
-                      height: callState === 'active' && (isUserSpeaking || isAgentSpeaking) 
-                        ? [8, 12 + Math.random() * 28, 8] 
-                        : 8 
+                    animate={{
+                      height: callState === 'active' && (isUserSpeaking || isAgentSpeaking)
+                        ? [8, 12 + Math.random() * 28, 8]
+                        : 8
                     }}
                     transition={{ duration: 0.4, delay: i * 0.015, repeat: Infinity }} />
                 ))}
@@ -586,11 +311,10 @@ export default function VoiceCallPage() {
                 {messages.map((msg, i) => (
                   <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                     className={`flex ${msg.role === 'caller' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl shadow-lg ${
-                      msg.role === 'caller' 
-                        ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-purple-500 text-white rounded-tr-none border border-white/10' 
-                        : 'glass-panel text-zinc-200 rounded-tl-none border border-white/10'
-                    }`}>
+                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl shadow-lg ${msg.role === 'caller'
+                      ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-purple-500 text-white rounded-tr-none border border-white/10'
+                      : 'glass-panel text-zinc-200 rounded-tl-none border border-white/10'
+                      }`}>
                       <p className="text-[9px] font-mono font-bold tracking-wider text-purple-400 mb-1">{msg.role === 'agent' ? 'AI AGENT' : 'YOU'}</p>
                       <p className="text-sm leading-relaxed">{msg.text}</p>
                     </div>
@@ -613,12 +337,11 @@ export default function VoiceCallPage() {
 
             {callState === 'active' && (
               <div className="flex justify-center gap-4">
-                <button onClick={handleMute} 
-                  className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all ${
-                    isMuted 
-                      ? 'bg-red-500/20 border-red-500/30 text-red-400 shadow-lg shadow-red-500/10 animate-pulse' 
-                      : 'glass-panel border-white/15 text-white hover:bg-white/10'
-                  }`}>
+                <button onClick={handleMute}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all ${isMuted
+                    ? 'bg-red-500/20 border-red-500/30 text-red-400 shadow-lg shadow-red-500/10 animate-pulse'
+                    : 'glass-panel border-white/15 text-white hover:bg-white/10'
+                    }`}>
                   {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
                 </button>
                 <button onClick={endCall}

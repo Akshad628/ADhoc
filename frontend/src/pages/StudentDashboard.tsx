@@ -134,12 +134,19 @@ function CareerAssistant() {
       }
 
       audio.onerror = (e) => {
-        console.error("Audio playback error:", e)
-        toast.error("Audio playback failed.")
+        console.error("Audio playback error event:", e)
+        console.error("Audio element error details:", audio.error)
+        toast.error(`Audio playback failed: ${audio.error?.message || 'unknown error'}`)
         setVoiceState('idle')
       }
 
-      await audio.play()
+      try {
+        await audio.play()
+      } catch (playErr) {
+        console.error("Audio play promise rejected:", playErr)
+        toast.error("Audio playback blocked by browser. Click anywhere on the page first.")
+        setVoiceState('idle')
+      }
     } catch (e) {
       console.error("Speech synthesis failed:", e)
       toast.error("Speech synthesis failed.")
@@ -246,44 +253,11 @@ function CareerAssistant() {
       }
     }
 
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition
-
-    if (SpeechRecognition) {
-      try {
-        const recognition = new SpeechRecognition()
-        recognition.lang = "en-US"
-        recognition.interimResults = false
-        recognition.maxAlternatives = 1
-        recognitionRef.current = recognition
-
-        recognition.onresult = () => {
-          stopListening()
-        }
-
-        recognition.onerror = (e: any) => {
-          console.warn("SpeechRecognition warning:", e.error)
-          if (e.error === 'not-allowed') {
-            stopListening()
-          }
-        }
-
-        recognition.onend = () => {
-          stopListening()
-        }
-
-        recognition.start()
-      } catch (recognitionErr) {
-        console.warn("SpeechRecognition startup skipped:", recognitionErr)
-      }
-    }
-
     mediaRecorder.start()
 
     audioTimeoutRef.current = setTimeout(() => {
       stopListening()
-    }, 10000)
+    }, 25000)
   }
 
   const stopListening = () => {

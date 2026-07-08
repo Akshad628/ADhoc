@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -10,7 +10,7 @@ type Agent = {
   phone_number?: string | null
 }
 
-type CallStatus = 'idle' | 'dialing' | 'connected' | 'ended'
+type CallStatus = 'idle' | 'dialing' | 'ringing' | 'connected' | 'ai_speaking' | 'student_speaking' | 'thinking' | 'ended'
 
 type TranscriptMessage = {
   role: 'Agent' | 'Student'
@@ -23,21 +23,6 @@ const agentOrder = [
   'Onboarding Agent',
   'Fee Reminder Agent',
   'Outreach Agent',
-]
-
-const transcript: TranscriptMessage[] = [
-  {
-    role: 'Agent',
-    text: 'Hello, I am calling from ADhoc College.',
-  },
-  {
-    role: 'Student',
-    text: 'Hi.',
-  },
-  {
-    role: 'Agent',
-    text: 'Are you interested in admissions?',
-  },
 ]
 
 function formatTimer(totalSeconds: number) {
@@ -69,6 +54,10 @@ export default function CallConsolePage() {
   const [callStartedAt, setCallStartedAt] = useState<number | null>(null)
   const [loadingAgents, setLoadingAgents] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [callId, setCallId] = useState<string | null>(null)
+  const [transcript, setTranscript] = useState<TranscriptMessage[]>([])
+  
+  const monitorWsRef = useRef<WebSocket | null>(null)
 
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.id === selectedAgentId) ?? null,
@@ -121,7 +110,7 @@ export default function CallConsolePage() {
   }, [])
 
   useEffect(() => {
-    if ((callStatus !== 'dialing' && callStatus !== 'connected') || !callStartedAt) {
+    if (callStatus === 'idle' || callStatus === 'ended' || !callStartedAt) {
       return
     }
 
@@ -136,30 +125,121 @@ export default function CallConsolePage() {
   }, [callStartedAt, callStatus])
 
   useEffect(() => {
-    if (callStatus !== 'dialing') {
-      return
+    return () => {
+      if (monitorWsRef.current) {
+        monitorWsRef.current.close()
+      }
+    }
+  }, [])
+
+  const connectMonitorWebSocket = (cid: string) => {
+    if (monitorWsRef.current) {
+      monitorWsRef.current.close()
     }
 
-    const timeoutId = window.setTimeout(() => {
-      setCallStatus('connected')
-      toast.success('Call connected')
-    }, 5000)
+    const wsUrl = `ws://localhost:8000/ws/calls/monitor/${cid}`
+    const ws = new WebSocket(wsUrl)
+    monitorWsRef.current = ws
 
-    return () => window.clearTimeout(timeoutId)
-  }, [callStatus])
+    ws.onopen = () => {
+      console.log('Connected to call monitor WebSocket')
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'status') {
+          const backendStatus = data.status
+          if (backendStatus == 'ringing') {
+            setCallStatus('ringing')
+          } else if (backendStatus === 'answered') {
+            setCallStatus('connected')
+          } else if (backendStatus === 'ai_speaking') {
+            setCallStatus('ai_speaking')
+          } else if (backendStatus === 'student_speaking') {
+            setCallStatus('student_speaking')
+          } else if (backendStatus === 'thinking') {
+            setCallStatus('thinking')
+          } else if (backendStatus === 'listening') {
+            setCallStatus('connected')
+          } else if (backendStatus === 'completed') {
+            setCallStatus('ended')
+            ws.close()
+          }
+        } else if (data.type === 'transcript') {
+          setTranscript((prev) => {
+            // Deduplicate incoming transcript items if needed
+            const last = prev[prev.length - 1]
+            if (last && last.role === data.role && last.text === data.text) {
+              return prev
+            }
+            return [
+              ...prev,
+              {
+                role: data.role,
+                text: data.text,
+              },
+            ]
+          })
+        }
+      } catch (err) {
+        console.error('Error parsing monitor message:', err)
+      }
+    }
+
+    ws.onclose = () => {
+      console.log('Monitor WebSocket closed')
+    }
+
+    ws.onerror = (err) => {
+      console.error('Monitor WebSocket error:', err)
+    }
+  }
 
   const initiateCall = async () => {
-    // TODO: Twilio integration
-    // TODO: Deepgram STT
-    // TODO: Groq LLM
-    // TODO: ElevenLabs TTS
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('http://localhost:8000/api/calls/initiate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          agent_id: selectedAgentId,
+          phone_number: `${countryCode}${phoneNumber}`,
+          topic: 'Admission Counseling',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to initiate call')
+      }
+
+      const data = await response.json()
+      setCallId(data.call_id)
+      setTranscript([])
+      connectMonitorWebSocket(data.call_id)
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to initiate call.')
+      setCallStatus('idle')
+    }
   }
 
   const endCall = async () => {
-    // TODO: Twilio integration
-    // TODO: Deepgram STT
-    // TODO: Groq LLM
-    // TODO: ElevenLabs TTS
+    if (!callId) return
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`http://localhost:8000/api/calls/${callId}/end`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const handleMakeCall = async () => {
@@ -180,7 +260,7 @@ export default function CallConsolePage() {
     toast.success('Call ended')
   }
 
-  const callInProgress = callStatus === 'dialing' || callStatus === 'connected'
+  const callInProgress = callStatus !== 'idle' && callStatus !== 'ended'
 
   return (
     <motion.div
@@ -277,7 +357,7 @@ export default function CallConsolePage() {
           </div>
         )}
 
-        {callStatus === 'dialing' && (
+        {(callStatus === 'dialing' || callStatus === 'ringing') && (
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -299,7 +379,9 @@ export default function CallConsolePage() {
               </div>
 
               <h2 className="text-2xl font-bold text-white">{selectedAgent?.name}</h2>
-              <p className="mt-2 text-purple-300">Dialing...</p>
+              <p className="mt-2 text-purple-300">
+                {callStatus === 'ringing' ? 'Ringing...' : 'Dialing...'}
+              </p>
               <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 font-mono text-lg text-white">
                 <Clock3 size={18} className="text-zinc-400" />
                 {formatTimer(elapsedSeconds)}
@@ -308,15 +390,29 @@ export default function CallConsolePage() {
           </motion.div>
         )}
 
-        {callStatus === 'connected' && (
+        {(callStatus === 'connected' || callStatus === 'ai_speaking' || callStatus === 'student_speaking' || callStatus === 'thinking') && (
           <motion.div
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             className="flex min-h-[300px] flex-col items-center justify-center text-center"
           >
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-medium text-emerald-300">
+            <div className={`mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ${
+              callStatus === 'ai_speaking'
+                ? 'bg-cyan-500/15 text-cyan-300 animate-pulse'
+                : callStatus === 'student_speaking'
+                ? 'bg-purple-500/15 text-purple-300 animate-pulse'
+                : callStatus === 'thinking'
+                ? 'bg-pink-500/15 text-pink-300 animate-pulse'
+                : 'bg-emerald-500/15 text-emerald-300'
+            }`}>
               <Radio size={16} />
-              Connected
+              {callStatus === 'ai_speaking'
+                ? 'AI Speaking'
+                : callStatus === 'student_speaking'
+                ? 'Student Speaking'
+                : callStatus === 'thinking'
+                ? 'Thinking...'
+                : 'Connected'}
             </div>
             <h2 className="text-2xl font-bold text-white">{formatTimer(elapsedSeconds)}</h2>
             <p className="mt-2 text-sm text-zinc-400">{selectedAgent?.name}</p>
@@ -326,9 +422,15 @@ export default function CallConsolePage() {
                 <motion.div
                   key={index}
                   className="w-1.5 rounded-full bg-gradient-to-t from-purple-500 to-cyan-300"
-                  animate={{ height: [14, 54, 20, 42, 14] }}
+                  animate={{
+                    height: callStatus === 'thinking'
+                      ? [14, 24, 14]
+                      : callStatus === 'ai_speaking' || callStatus === 'student_speaking'
+                      ? [14, 54, 20, 42, 14]
+                      : [14, 14, 14]
+                  }}
                   transition={{
-                    duration: 1.1,
+                    duration: callStatus === 'thinking' ? 0.6 : 1.1,
                     delay: index * 0.04,
                     repeat: Infinity,
                     ease: 'easeInOut',
