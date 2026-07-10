@@ -5,6 +5,7 @@ import { LayoutDashboard, GraduationCap, FileText, Award, BookOpen, Map, LogOut,
 import { useAuth } from '../context/AuthContext'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { apiFetch } from '../hooks/useApi'
+import { VoiceTransportFactory, VoiceTransport } from '../services/voice/VoiceTransportFactory'
 import MyScholarshipsPage from './MyScholarshipsPage'
 import toast from 'react-hot-toast'
 
@@ -67,13 +68,12 @@ function CareerAssistant() {
   const [loading, setLoading] = useState(false)
   const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
 
+  const [callStatus, setCallStatus] = useState<'idle' | 'connecting' | 'listening' | 'processing' | 'speaking'>('idle')
+  const transportRef = useRef<VoiceTransport | null>(null)
+  const sessionIdRef = useRef(`session_${Date.now()}`)
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const recognitionRef = useRef<any>(null)
-  const audioTimeoutRef = useRef<any>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -81,200 +81,97 @@ function CareerAssistant() {
 
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.src = ""
-      }
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach(t => t.stop())
-      }
-      if (audioTimeoutRef.current) {
-        clearTimeout(audioTimeoutRef.current)
-      }
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop() } catch (e) {}
       }
     }
   }, [])
 
-  const speak = async (text: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ""
-      audioRef.current = null
-    }
-    if (audioTimeoutRef.current) {
-      clearTimeout(audioTimeoutRef.current)
-      audioTimeoutRef.current = null
-    }
-
-    setVoiceState('speaking')
-    try {
-      const response = await fetch('http://localhost:8000/api/voice/tts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ text }),
-      })
-
-      if (!response.ok) {
-        throw new Error('TTS generation failed')
-      }
-
-      const audioBlob = await response.blob()
-      const audioUrl = URL.createObjectURL(audioBlob)
-      const audio = new Audio(audioUrl)
-      audioRef.current = audio
-
-      audio.onended = () => {
-        setVoiceState('idle')
-        URL.revokeObjectURL(audioUrl)
-      }
-
-      audio.onerror = (e) => {
-        console.error("Audio playback error event:", e)
-        console.error("Audio element error details:", audio.error)
-        toast.error(`Audio playback failed: ${audio.error?.message || 'unknown error'}`)
-        setVoiceState('idle')
-      }
-
-      try {
-        await audio.play()
-      } catch (playErr) {
-        console.error("Audio play promise rejected:", playErr)
-        toast.error("Audio playback blocked by browser. Click anywhere on the page first.")
-        setVoiceState('idle')
-      }
-    } catch (e) {
-      console.error("Speech synthesis failed:", e)
-      toast.error("Speech synthesis failed.")
-      setVoiceState('idle')
-    }
-  }
-
   const startListening = async () => {
-    if (voiceState !== 'idle') {
-      if (voiceState === 'listening') {
-        stopListening()
-      }
-      return
+    if (transportRef.current?.isConnected()) {
+    await transportRef.current.disconnect()
+    transportRef.current = null
+
+    setVoiceState("idle")
+    setCallStatus("idle")
+
+    toast.success("Voice session ended")
+    return
+}
+
+  try {
+    setVoiceState("listening")
+    setCallStatus("connecting")
+
+    const backendUrl = "http://localhost:8000"
+    sessionIdRef.current = `session_${Date.now()}`
+
+    const statusResponse = await fetch(
+      `${backendUrl}/api/voice/fastrtc-status`
+    )
+
+    const status = await statusResponse.json()
+
+    const transport = VoiceTransportFactory.create(
+      status.available && status.stream_ready ? "fastrtc" : "websocket",
+      backendUrl
+    )
+
+    transportRef.current = transport
+
+    transport.setEvents({
+  onStateChange: (state) => {
+    console.log("FastRTC:", state)
+
+    if (state === "connected") {
+      setVoiceState("listening")
+      setCallStatus("listening")
+      toast.success("Voice connected")
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ""
-      audioRef.current = null
+    if (state === "disconnected") {
+      setVoiceState("idle")
+      setCallStatus("idle")
     }
+  },
 
-    setVoiceState('listening')
-    audioChunksRef.current = []
+  onTranscript: (msg) => {
+    const role =
+      msg.role === "assistant" || msg.role === "agent"
+        ? "agent"
+        : "user"
 
-    let stream: MediaStream
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      mediaStreamRef.current = stream
-    } catch (err) {
-      console.error("Microphone access denied:", err)
-      toast.error("Microphone permission denied or unavailable.")
-      setVoiceState('idle')
-      return
-    }
+    setMessages(prev => [
+      ...prev,
+      {
+        role,
+        text: msg.text,
+      },
+    ])
+  },
 
-    let mediaRecorder: MediaRecorder
-    try {
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
-    } catch (e) {
-      try {
-        mediaRecorder = new MediaRecorder(stream)
-      } catch (e2) {
-        console.error("MediaRecorder unsupported:", e2)
-        toast.error("Speech capture is not supported by your browser.")
-        stream.getTracks().forEach(t => t.stop())
-        setVoiceState('idle')
-        return
-      }
-    }
+  onAudio: () => {
+    setVoiceState("speaking")
+    setCallStatus("speaking")
+  },
 
-    mediaRecorderRef.current = mediaRecorder
+  onError: (err) => {
+    console.error(err)
+    toast.error("FastRTC Error")
+  },
 
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunksRef.current.push(event.data)
-      }
-    }
+  onDisconnected: () => {
+    transportRef.current = null
+    setVoiceState("idle")
+    setCallStatus("idle")
+  },
+})
 
-    mediaRecorder.onstop = async () => {
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop())
-        mediaStreamRef.current = null
-      }
+await transport.connect(sessionIdRef.current)
 
-      const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' })
-      audioChunksRef.current = []
-
-      if (audioBlob.size < 1000) {
-        setVoiceState('idle')
-        return
-      }
-
-      setVoiceState('thinking')
-      try {
-        const formData = new FormData()
-        formData.append('file', audioBlob, 'audio.webm')
-
-        const response = await fetch('http://localhost:8000/api/voice/transcribe', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: formData,
-        })
-
-        if (!response.ok) {
-          throw new Error('Transcription failed')
-        }
-
-        const data = await response.json()
-        const text = data.text
-
-        if (!text || !text.trim()) {
-          toast.error("No speech detected.")
-          setVoiceState('idle')
-          return
-        }
-
-        await sendMessage(text)
-      } catch (err) {
-        console.error("Transcription error:", err)
-        toast.error("Speech transcription failed.")
-        setVoiceState('idle')
-      }
-    }
-
-    mediaRecorder.start()
-
-    audioTimeoutRef.current = setTimeout(() => {
-      stopListening()
-    }, 25000)
+  } catch (err) {
+    console.error(err)
   }
-
-  const stopListening = () => {
-    if (audioTimeoutRef.current) {
-      clearTimeout(audioTimeoutRef.current)
-      audioTimeoutRef.current = null
-    }
-
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch (e) {}
-      recognitionRef.current = null
-    }
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try { mediaRecorderRef.current.stop() } catch (e) {}
-      mediaRecorderRef.current = null
-    }
   }
 
   const sendMessage = async (voiceText?: string) => {
@@ -315,7 +212,6 @@ function CareerAssistant() {
         },
       ]);
       setLoading(false);
-      await speak(data.response);
 
     } catch (error) {
       console.error(error);
@@ -419,22 +315,47 @@ function CareerAssistant() {
           </button>
         </div>
       </div>
-      {voiceState === 'listening' && (
-        <p className="mt-2 text-sm text-red-400 animate-pulse flex items-center gap-1.5 justify-center">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-          🎤 Listening... Speak now
-        </p>
-      )}
-      {voiceState === 'thinking' && (
-        <p className="mt-2 text-sm text-yellow-400 animate-pulse flex items-center gap-1.5 justify-center">
-          ⚡ Processing voice...
-        </p>
-      )}
-      {voiceState === 'speaking' && (
-        <p className="mt-2 text-sm text-cyan-400 animate-pulse flex items-center gap-1.5 justify-center">
-          🔊 AI is speaking...
-        </p>
-      )}
+      {callStatus !== 'idle' && (
+  <p
+    className={`mt-2 text-sm animate-pulse flex items-center gap-1.5 justify-center ${
+      callStatus === 'connecting'
+        ? 'text-yellow-400'
+        : callStatus === 'listening'
+        ? 'text-red-400'
+        : callStatus === 'processing'
+        ? 'text-orange-400'
+        : 'text-cyan-400'
+    }`}
+  >
+    {callStatus === 'connecting' && (
+      <>
+        <span className="w-2 h-2 rounded-full bg-yellow-400 animate-ping"></span>
+        Connecting...
+      </>
+    )}
+
+    {callStatus === 'listening' && (
+      <>
+        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+        🎤 Listening...
+      </>
+    )}
+
+    {callStatus === 'processing' && (
+      <>
+        <span className="w-2 h-2 rounded-full bg-orange-400 animate-ping"></span>
+        ⚡ Processing...
+      </>
+    )}
+
+    {callStatus === 'speaking' && (
+      <>
+        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+        🤖 AI Speaking...
+      </>
+    )}
+  </p>
+)}
     </div>
   )
 }

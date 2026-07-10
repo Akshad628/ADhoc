@@ -20,6 +20,8 @@ export default function VoiceCallPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sessionIdRef = useRef<string>(`session_${Date.now()}`)
   const transportRef = useRef<VoiceTransport | null>(null)
+  const transcriptRef = useRef<HTMLDivElement | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   // Timer
   useEffect(() => {
@@ -177,6 +179,13 @@ export default function VoiceCallPage() {
     return () => { endCall() }
   }, [endCall])
 
+  useEffect(() => {
+  messagesEndRef.current?.scrollIntoView({
+    behavior: "smooth",
+    block: "end",
+  })
+}, [messages])
+
   const getStatusText = () => {
     switch (callStatus) {
       case 'listening': return 'Listening... Speak now'
@@ -291,7 +300,10 @@ export default function VoiceCallPage() {
               </div>
             </div>
 
-            <div className="glass-panel rounded-2xl p-6 mb-4 h-80 overflow-y-auto border border-white/10 shadow-xl scrollbar-thin">
+            <div
+    ref={transcriptRef}
+    className="glass-panel rounded-2xl p-6 mb-4 h-80 overflow-y-auto border border-white/10 shadow-xl scrollbar-thin"
+>
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/5">
                 <h4 className="text-[10px] text-zinc-500 font-mono font-bold tracking-widest">LIVE TRANSCRIPT</h4>
                 <span className="flex items-center gap-2 text-[10px] font-mono font-semibold text-emerald-400">
@@ -320,6 +332,8 @@ export default function VoiceCallPage() {
                     </div>
                   </motion.div>
                 ))}
+
+                <div ref={messagesEndRef} />
 
                 {callState === 'active' && messages.length > 0 && messages[messages.length - 1].role === 'caller' && !isAgentSpeaking && (
                   <div className="flex justify-start">
