@@ -485,7 +485,9 @@ export default function CallConsolePage() {
                 }`}
               >
                 <span className="mb-1 block text-xs font-semibold text-purple-300">{message.role}</span>
-                {message.text}
+                <p className="text-sm leading-relaxed">
+  {message.text}
+</p>
               </div>
             </div>
           ))}

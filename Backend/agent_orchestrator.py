@@ -35,10 +35,10 @@ Current context: You are speaking with a student who needs guidance. Be conversa
     tts_model: str = "playai-tts"
 
     # VAD / Turn-taking
-    vad_speech_threshold: float = 0.5
-    vad_started_talking_threshold: float = 0.25
-    vad_audio_chunk_duration: float = 0.6
-    vad_min_silence_ms: int = 1200  # Silence before considering turn over
+    vad_speech_threshold: float = 0.60
+    vad_started_talking_threshold: float = 0.40
+    vad_audio_chunk_duration: float = 0.8
+    vad_min_silence_ms: int = 1800  # Silence before considering turn over
 
     # Barge-in / interruption
     can_interrupt: bool = True

@@ -8,6 +8,8 @@ import { apiFetch } from '../hooks/useApi'
 import { VoiceTransportFactory, VoiceTransport } from '../services/voice/VoiceTransportFactory'
 import MyScholarshipsPage from './MyScholarshipsPage'
 import toast from 'react-hot-toast'
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function StudentHome() {
   const { callsOverTime, loading } = useAnalytics()
@@ -244,7 +246,21 @@ await transport.connect(sessionIdRef.current)
                   : 'glass-panel text-zinc-200 rounded-tl-none border border-white/10'
               }`}>
                 <p className="text-[10px] font-mono font-bold tracking-wider text-purple-400 mb-1.5">{msg.role === 'agent' ? 'AI ASSISTANT' : 'YOU'}</p>
-                <p className="text-sm leading-relaxed">{msg.text}</p>
+                <div
+  className="text-sm leading-relaxed
+    [&_ul]:list-disc
+    [&_ul]:ml-5
+    [&_ol]:list-decimal
+    [&_ol]:ml-5
+    [&_li]:mb-1
+    [&_p]:mb-2
+    [&_strong]:font-semibold
+    [&_strong]:text-white"
+>
+  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+    {msg.text}
+  </ReactMarkdown>
+</div>
               </div>
             </div>
           ))}

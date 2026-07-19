@@ -22,6 +22,7 @@ import tempfile
 import asyncio
 import json
 from typing import Generator, Tuple, Optional, TYPE_CHECKING
+import config
 
 import numpy as np
 from groq import Groq
@@ -260,7 +261,9 @@ def create_fastrtc_handler(engine: "CareerGuidanceEngine", agent_config_preset: 
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            ai_response = loop.run_until_complete(engine.process_text(transcript, session_id))
+            ai_response = loop.run_until_complete(
+                engine.process_text(
+                    transcript,session_id,config.VOICE_AGENT_SYSTEM_PROMPT,))
             loop.close()
             print(f"💬 [LLM] Response: '{ai_response}'")
             session.add_assistant_message(ai_response)

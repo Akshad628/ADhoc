@@ -8,15 +8,30 @@ class CareerGuidanceEngine:
     def __init__(self):
         self.conversations: Dict[str, List[Dict[str, str]]] = {}
 
-    def get_conversation(self, session_id: str) -> List[Dict[str, str]]:
+    def get_conversation(
+            self,
+            session_id: str,
+            system_prompt: str = config.CAREER_SYSTEM_PROMPT,
+            ) -> List[Dict[str, str]]:
         if session_id not in self.conversations:
             self.conversations[session_id] = [
-                {"role": "system", "content": config.CAREER_SYSTEM_PROMPT}
-            ]
+            {
+                "role": "system",
+                "content": system_prompt,
+            }
+        ]
         return self.conversations[session_id]
 
-    async def process_text(self, text: str, session_id: str) -> str:
-        conversation = self.get_conversation(session_id)
+    async def process_text(
+            self,
+            text: str,
+            session_id: str,
+            system_prompt: str = config.CAREER_SYSTEM_PROMPT,
+            ) -> str:
+        conversation = self.get_conversation(
+            session_id,
+            system_prompt,
+            )
         conversation.append({"role": "user", "content": text})
 
         if len(conversation) > 12:
@@ -37,7 +52,7 @@ class CareerGuidanceEngine:
             model="llama-3.3-70b-versatile",
             messages=messages_for_groq,  # type: ignore
             temperature=0.7,
-            max_tokens=256,
+            max_tokens=512,
             top_p=0.9
         )
 
