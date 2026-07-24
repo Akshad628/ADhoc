@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import base64
 import math
 import tempfile
@@ -285,6 +286,8 @@ async def generate_and_send_greeting(websocket: WebSocket, call_id: str, stream_
     greeting_text = "Hello! I am your AI career assistant. How can I help you today?"
     if config.groq_client:
         try:
+            start = time.time()
+            print("Generating greeting with Groq...")
             prompt = system_prompt + f"\n\nStudent's name is {student_name}. Write a short, welcoming phone greeting (1-2 sentences max) to start the call. Do not output anything other than the greeting text."
             response = config.groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -292,6 +295,7 @@ async def generate_and_send_greeting(websocket: WebSocket, call_id: str, stream_
                 max_tokens=60,
                 temperature=0.7
             )
+            print(f"Groq greeting generated in {time.time()-start:.2f} sec")
             greeting_text = response.choices[0].message.content.strip().strip('"')
         except Exception as e:
             print(f"Greeting gen failed: {e}")
@@ -305,7 +309,10 @@ async def generate_and_send_greeting(websocket: WebSocket, call_id: str, stream_
     await broadcast_monitor_message(call_id, {"type": "transcript", "role": "Agent", "text": greeting_text})
     await broadcast_monitor_message(call_id, {"type": "status", "status": "ai_speaking"})
     
+    start = time.time()
     audio_bytes = await guidance_engine.text_to_speech(greeting_text)
+    print(f"Greeting TTS took {time.time()-start:.2f} sec")
+
     if audio_bytes:
         pcm_data = strip_wav_header(audio_bytes)
         pcm_data = ensure_16bit_aligned(pcm_data)
@@ -542,6 +549,7 @@ async def websocket_voice(websocket: WebSocket, session_id: str):
                                         state["is_user_speaking"] = False
                                         state["silence_duration_ms"] = 0
                                         pcm_data = mulaw_8k_to_pcm_16k(bytes(audio_buffer))
+                                        print(f"PCM bytes: {len(pcm_data)}")
                                         audio_buffer = bytearray()
                                         if len(pcm_data) >= 16000:
                                             asyncio.create_task(process_audio_buffer(
@@ -572,8 +580,12 @@ async def process_audio_buffer(websocket: WebSocket, session_id: str,
     if is_twilio:
         await broadcast_monitor_message(session_id, {"type": "status", "status": "thinking"})
 
+    start = time.time()
+    print(f"Received audio: {len(audio_bytes)} bytes")
     print("Transcribing...")
     transcript = await guidance_engine.transcribe_audio(audio_bytes)
+    print(f"Transcript: {transcript}")
+    print(f"Transcription took {time.time()-start:.2f} sec")
 
     if not transcript or not transcript.strip() or not is_valid_transcription(transcript):
         if is_twilio:
@@ -593,7 +605,9 @@ async def process_audio_buffer(websocket: WebSocket, session_id: str,
         await websocket.send_json({"type": "transcript", "text": transcript})
 
     try:
+        start = time.time()
         ai_response = await guidance_engine.process_text(transcript, session_id)
+        print(f"LLM took {time.time()-start:.2f} sec")
         print(f"AI: {ai_response}")
         
         if is_twilio:
@@ -602,7 +616,12 @@ async def process_audio_buffer(websocket: WebSocket, session_id: str,
         else:
             await websocket.send_json({"type": "ai_response", "text": ai_response})
 
+        start = time.time()
+
         audio_bytes_tts = await guidance_engine.text_to_speech(ai_response)
+
+        print(f"Reply TTS took {time.time()-start:.2f} sec")
+        
         if audio_bytes_tts:
             pcm_data = strip_wav_header(audio_bytes_tts)
             pcm_data = ensure_16bit_aligned(pcm_data)
