@@ -113,6 +113,10 @@ async def twilio_webhook(request: Request):
     else:
         resp.hangup()
 
+    print("===== TWIML SENT TO TWILIO =====")
+    print(str(resp))
+    print("================================")
+
     return Response(content=str(resp), media_type="application/xml")
 
 @router.get("")

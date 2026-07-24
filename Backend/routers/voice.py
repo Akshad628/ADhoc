@@ -388,6 +388,7 @@ Output ONLY the JSON object. Do not include any markdown styling, code blocks, o
 # ─── WEBSOCKET VOICE HANDLER ────────────────────────────────────────────────
 @router.websocket("/ws/voice/{session_id}")
 async def websocket_voice(websocket: WebSocket, session_id: str):
+    print(f"VOICE WEBSOCKET CONNECTED - Session: {session_id}")
     await websocket.accept()
     print(f"WebSocket connected: {session_id}")
 
